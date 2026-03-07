@@ -1,0 +1,82 @@
+```css
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #f4f6f8;
+}
+
+.container {
+  max-width: 720px;
+  margin: 40px auto;
+  padding: 20px;
+}
+
+.header {
+  background: #1b5e20;
+  color: white;
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.title {
+  margin: 0;
+  font-size: 28px;
+}
+
+.nav {
+  margin-top: 10px;
+}
+
+.nav button {
+  margin-right: 10px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  background: white;
+  color: #1b5e20;
+  cursor: pointer;
+}
+
+.card {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  margin-bottom: 20px;
+}
+
+input {
+  width: 100%;
+  padding: 10px;
+  margin-top: 6px;
+  margin-bottom: 14px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+button {
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: none;
+  background: #2e7d32;
+  color: white;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #1b5e20;
+}
+
+.qrBox {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.statusBox {
+  margin-top: 20px;
+  padding: 14px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+```
