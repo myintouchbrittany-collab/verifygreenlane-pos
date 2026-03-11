@@ -1,8 +1,14 @@
-import { render, screen } from 'firebase';
-import App from './App';
+import { buildPickupCode, parsePickupCode } from "./services/orderUtils";
 
-test('renders learn react link', () => {
-  render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+test("builds and parses a pickup QR payload", () => {
+  const code = buildPickupCode({
+    customerId: "customer-123",
+    orderNumber: "GL-456789",
+  });
+
+  expect(parsePickupCode(code)).toEqual({
+    customerId: "customer-123",
+    orderNumber: "GL-456789",
+    type: "greenlane-express-pickup",
+  });
 });

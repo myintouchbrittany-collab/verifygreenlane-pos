@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { db } from "../../firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { createCustomerAndOrder } from "../../services/orderModel";
+import { DEFAULT_STORE_ID } from "../../services/storeConfig";
 
 export default function CustomerUpload() {
   const navigate = useNavigate();
@@ -23,15 +23,33 @@ export default function CustomerUpload() {
     try {
       setLoading(true);
 
-      await addDoc(collection(db, "customers"), {
-        name: name.trim(),
-        order: orderNumber.trim(),
-        status: "Verified",
-        checkedIn: false,
-        arrivalTime: "",
-        pickupStatus: "Waiting",
-        checkoutTime: "",
-        createdAt: serverTimestamp(),
+      await createCustomerAndOrder({
+        storeId: DEFAULT_STORE_ID,
+        customerFields: {
+          name: name.trim(),
+          fullName: name.trim(),
+          status: "Approved",
+          verificationStatus: "verified",
+          idUploadComplete: true,
+          idUploads: {
+            frontFileName: frontFile.name,
+            backFileName: backFile.name,
+          },
+        },
+        orderFields: {
+          orderNumber: orderNumber.trim(),
+          status: "approved",
+          orderStatus: "approved",
+          verificationStatus: "verified",
+          idVerificationStatus: "verified",
+          pickupStatus: "Approved",
+          source: "Staff Customer Upload",
+          channel: "staff_created",
+          orderItems: [],
+          subtotal: 0,
+          discount: 0,
+          total: 0,
+        },
       });
 
       alert("Customer added successfully.");

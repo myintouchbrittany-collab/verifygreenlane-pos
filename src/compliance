@@ -1,4 +1,4 @@
-import { STATE_CONFIG } from "./stateConfig.js";
+import { STATE_CONFIG } from "./config/stateConfig.js";
 
 export function calculateCartTotals(cart = []) {
   return cart.reduce(

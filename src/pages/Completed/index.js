@@ -1,32 +1,22 @@
-import React, { useEffect, useState } from "react";
-import { db } from "../../firebase";
-import { collection, onSnapshot } from "firebase/firestore";
+import React, { useMemo } from "react";
+import { useOrders } from "../../context/OrdersContext";
+import {
+  getOrderWorkflowLabel,
+} from "../../services/orderService";
+import { formatStatusLabel } from "../../services/orderUtils";
 
 export default function Completed() {
-  const [customers, setCustomers] = useState([]);
+  const { orders } = useOrders();
 
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "customers"), (snapshot) => {
-      const data = snapshot.docs.map((docItem) => ({
-        id: docItem.id,
-        ...docItem.data(),
-      }));
-
-      setCustomers(data);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const completedOrders = customers.filter(
-    (customer) => customer.pickupStatus === "Completed"
-  );
+  const completedOrders = useMemo(() => {
+    return orders.filter((order) => order.orderStatus === "completed");
+  }, [orders]);
 
   return (
     <div style={pageStyle}>
       <h1 style={headingStyle}>Completed Orders</h1>
       <p style={subheadingStyle}>
-        History of finished customer pickups.
+        History of approved preorders that have been picked up.
       </p>
 
       {completedOrders.length === 0 ? (
@@ -41,18 +31,24 @@ export default function Completed() {
                 <th style={thStyle}>Customer</th>
                 <th style={thStyle}>Order</th>
                 <th style={thStyle}>Verification</th>
+                <th style={thStyle}>Final Status</th>
                 <th style={thStyle}>Arrival Time</th>
                 <th style={thStyle}>Checkout Time</th>
               </tr>
             </thead>
             <tbody>
-              {completedOrders.map((customer) => (
-                <tr key={customer.id}>
-                  <td style={tdStyle}>{customer.name}</td>
-                  <td style={tdStyle}>{customer.order}</td>
-                  <td style={tdStyle}>{customer.status}</td>
-                  <td style={tdStyle}>{customer.arrivalTime || "—"}</td>
-                  <td style={tdStyle}>{customer.checkoutTime || "—"}</td>
+              {completedOrders.map((order) => (
+                <tr key={order.orderId || order.id}>
+                  <td style={tdStyle}>{order.customerName || order.name}</td>
+                  <td style={tdStyle}>{order.orderNumber || order.order}</td>
+                  <td style={tdStyle}>
+                    {formatStatusLabel(
+                      order.idVerificationStatus || "pending_verification"
+                    )}
+                  </td>
+                  <td style={tdStyle}>{getOrderWorkflowLabel(order)}</td>
+                  <td style={tdStyle}>{order.arrivalTime || "-"}</td>
+                  <td style={tdStyle}>{order.checkoutTime || "-"}</td>
                 </tr>
               ))}
             </tbody>

@@ -1,29 +1,32 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { db } from "../../firebase";
-import { collection, onSnapshot, doc, updateDoc } from "firebase/firestore";
+import React, { useMemo, useState } from "react";
+import { useOrders } from "../../context/OrdersContext";
+import {
+  getOrderWorkflowLabel,
+  updateOrderWorkflow,
+} from "../../services/orderService";
+import { formatCurrency, formatStatusLabel } from "../../services/orderUtils";
 
 export default function Checkout() {
-  const [customers, setCustomers] = useState([]);
+  const { orders } = useOrders();
   const [searchTerm, setSearchTerm] = useState("");
 
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "customers"), (snapshot) => {
-      const data = snapshot.docs.map((docItem) => ({
-        id: docItem.id,
-        ...docItem.data(),
-      }));
+  const readyOrders = useMemo(() => {
+    return orders
+      .filter((order) => order.orderStatus === "ready_for_pickup")
+      .filter((order) => {
+        const name = (order.customerName || order.name || "").toLowerCase();
+        const orderNumber = (order.orderNumber || order.order || "").toLowerCase();
+        const search = searchTerm.toLowerCase();
 
-      setCustomers(data);
-    });
+        return name.includes(search) || orderNumber.includes(search);
+      });
+  }, [orders, searchTerm]);
 
-    return () => unsubscribe();
-  }, []);
-
-  const completePickup = async (id) => {
+  const completePickup = async (order) => {
     try {
-      const customerRef = doc(db, "customers", id);
-
-      await updateDoc(customerRef, {
+      await updateOrderWorkflow(order.orderId || order.id, order.customerId, {
+        status: "completed",
+        orderStatus: "completed",
         pickupStatus: "Completed",
         checkoutTime: new Date().toLocaleTimeString(),
       });
@@ -32,25 +35,13 @@ export default function Checkout() {
     }
   };
 
-  const readyCustomers = useMemo(() => {
-    return customers
-      .filter((customer) => customer.pickupStatus === "Ready for Pickup")
-      .filter((customer) => {
-        const name = (customer.name || "").toLowerCase();
-        const order = (customer.order || "").toLowerCase();
-        const search = searchTerm.toLowerCase();
-
-        return name.includes(search) || order.includes(search);
-      });
-  }, [customers, searchTerm]);
-
   return (
     <div style={pageStyle}>
       <div style={headerRowStyle}>
         <div>
           <h1 style={headingStyle}>Checkout</h1>
           <p style={subheadingStyle}>
-            Complete ready orders and close out pickups.
+            Review preorder items, confirm completion, and close out pickup.
           </p>
         </div>
 
@@ -58,37 +49,69 @@ export default function Checkout() {
           type="text"
           placeholder="Search customer or order..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(event) => setSearchTerm(event.target.value)}
           style={searchInputStyle}
         />
       </div>
 
-      {readyCustomers.length === 0 ? (
-        <div style={emptyCardStyle}>
-          No customers are ready for checkout.
-        </div>
+      {readyOrders.length === 0 ? (
+        <div style={emptyCardStyle}>No customers are ready for checkout.</div>
       ) : (
         <div style={cardGridStyle}>
-          {readyCustomers.map((customer) => (
-            <div key={customer.id} style={queueCardStyle}>
-              <h3 style={cardTitleStyle}>{customer.name}</h3>
-
-              <p><strong>Order:</strong> {customer.order}</p>
-              <p><strong>Status:</strong> {customer.status || "Verified"}</p>
-              <p><strong>Arrival Time:</strong> {customer.arrivalTime || "—"}</p>
-
-              <p>
-                <strong>Pickup Status:</strong>{" "}
+          {readyOrders.map((order) => (
+            <div key={order.orderId || order.id} style={queueCardStyle}>
+              <div style={cardHeaderStyle}>
+                <h3 style={cardTitleStyle}>{order.customerName || order.name}</h3>
                 <span style={badgeStyle("#dff3e8", "#17633c")}>
-                  {customer.pickupStatus}
+                  {getOrderWorkflowLabel(order)}
                 </span>
+              </div>
+
+              <p><strong>Order:</strong> {order.orderNumber || order.order}</p>
+              <p><strong>Pickup Window:</strong> {order.pickupWindow || "Not set"}</p>
+              <p>
+                <strong>ID Status:</strong>{" "}
+                {formatStatusLabel(order.idVerificationStatus || "pending_verification")}
               </p>
+              <p><strong>Arrival Time:</strong> {order.arrivalTime || "—"}</p>
+
+              <div style={itemsCardStyle}>
+                <div style={itemsHeadingStyle}>Preorder Items</div>
+                {(order.orderItems || []).length === 0 ? (
+                  <div style={emptyItemsStyle}>No line items recorded.</div>
+                ) : (
+                  order.orderItems.map((item) => (
+                    <div key={item.id} style={itemRowStyle}>
+                      <div>
+                        <div style={itemNameStyle}>{item.name}</div>
+                        <div style={itemMetaStyle}>
+                          {item.quantity} x {formatCurrency(item.specialPrice || item.price)}
+                        </div>
+                      </div>
+                      <strong>
+                        {formatCurrency(
+                          (item.specialPrice || item.price) * item.quantity
+                        )}
+                      </strong>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div style={totalsRowStyle}>
+                <span>Subtotal</span>
+                <strong>{formatCurrency(order.subtotal || 0)}</strong>
+              </div>
+              <div style={totalsRowStyle}>
+                <span>Total</span>
+                <strong>{formatCurrency(order.total || 0)}</strong>
+              </div>
 
               <button
                 style={completeButtonStyle}
-                onClick={() => completePickup(customer.id)}
+                onClick={() => completePickup(order)}
               >
-                Complete Pickup
+                Confirm Completion
               </button>
             </div>
           ))}
@@ -148,7 +171,7 @@ const searchInputStyle = {
 
 const cardGridStyle = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
   gap: "18px",
 };
 
@@ -160,9 +183,61 @@ const queueCardStyle = {
   border: "1px solid #e6ece8",
 };
 
+const cardHeaderStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "12px",
+};
+
 const cardTitleStyle = {
   marginTop: 0,
   color: "#163126",
+};
+
+const itemsCardStyle = {
+  marginTop: "16px",
+  borderRadius: "12px",
+  border: "1px solid #e6ece8",
+  backgroundColor: "#f8faf8",
+  padding: "14px",
+};
+
+const itemsHeadingStyle = {
+  color: "#163126",
+  fontWeight: "700",
+  marginBottom: "12px",
+};
+
+const emptyItemsStyle = {
+  color: "#5c6b63",
+  fontSize: "14px",
+};
+
+const itemRowStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+  marginBottom: "10px",
+};
+
+const itemNameStyle = {
+  color: "#163126",
+  fontWeight: "700",
+};
+
+const itemMetaStyle = {
+  marginTop: "4px",
+  color: "#5c6b63",
+  fontSize: "13px",
+};
+
+const totalsRowStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginTop: "12px",
 };
 
 const completeButtonStyle = {
@@ -173,7 +248,8 @@ const completeButtonStyle = {
   padding: "10px 16px",
   cursor: "pointer",
   fontWeight: "bold",
-  marginTop: "12px",
+  marginTop: "16px",
+  width: "100%",
 };
 
 const emptyCardStyle = {

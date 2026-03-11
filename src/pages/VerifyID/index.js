@@ -1,350 +1,195 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Html5QrcodeScanner } from "html5-qrcode";
-import { db } from "../../firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import React, { useMemo, useState } from "react";
+import { useOrders } from "../../context/OrdersContext";
+import {
+  approvePreorder,
+  rejectPreorder,
+} from "../../services/orderService";
+import { formatCurrency, formatStatusLabel } from "../../services/orderUtils";
 
 export default function VerifyID() {
-  const scannerRef = useRef(null);
+  const { orders } = useOrders();
+  const [workingOrderId, setWorkingOrderId] = useState("");
 
-  const [fullName, setFullName] = useState("");
-  const [orderNumber, setOrderNumber] = useState("");
-  const [dateOfBirth, setDateOfBirth] = useState("");
-  const [idNumber, setIdNumber] = useState("");
-  const [idExpiration, setIdExpiration] = useState("");
-  const [verificationMethod, setVerificationMethod] = useState("manual");
-  const [scanResult, setScanResult] = useState("");
-  const [saving, setSaving] = useState(false);
+  const pendingOrders = useMemo(() => {
+    return orders.filter((order) => {
+      const status = order.orderStatus || order.status;
+      return status === "pending_review";
+    });
+  }, [orders]);
 
-  useEffect(() => {
-    const scanner = new Html5QrcodeScanner(
-      "reader",
-      { fps: 10, qrbox: 250 },
-      false
-    );
-
-    scannerRef.current = scanner;
-
-    scanner.render(onScanSuccess, onScanError);
-
-    async function onScanSuccess(decodedText) {
-      setScanResult(decodedText);
-      setVerificationMethod("scanner");
-
-      const parsed = parseScannedText(decodedText);
-
-      if (parsed.fullName) setFullName(parsed.fullName);
-      if (parsed.dateOfBirth) setDateOfBirth(parsed.dateOfBirth);
-      if (parsed.idNumber) setIdNumber(parsed.idNumber);
-      if (parsed.idExpiration) setIdExpiration(parsed.idExpiration);
-      if (!orderNumber) setOrderNumber(`#${Math.floor(1000 + Math.random() * 9000)}`);
-    }
-
-    function onScanError() {
-      // Quiet on purpose
-    }
-
-    return () => {
-      if (scannerRef.current) {
-        scannerRef.current.clear().catch(() => {});
-      }
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const age = useMemo(() => calculateAge(dateOfBirth), [dateOfBirth]);
-  const is21Plus = age >= 21;
-  const isExpired = isDateExpired(idExpiration);
-
-  const handleSaveCustomer = async (e) => {
-    e.preventDefault();
-
-    if (!fullName || !orderNumber || !dateOfBirth || !idExpiration) {
-      alert("Please complete name, order number, date of birth, and ID expiration.");
-      return;
-    }
-
-    if (!is21Plus) {
-      alert("Customer is under 21 and cannot be verified.");
-      return;
-    }
-
-    if (isExpired) {
-      alert("ID is expired and cannot be verified.");
-      return;
-    }
-
+  const handleApprove = async (order) => {
     try {
-      setSaving(true);
-
-      await addDoc(collection(db, "customers"), {
-        fullName: fullName.trim(),
-        name: fullName.trim(),
-        order: orderNumber.trim(),
-        dateOfBirth,
-        age,
-        idNumber: idNumber.trim(),
-        idExpiration,
-        is21Plus,
-        verificationMethod,
-        status: "Verified",
-        checkedIn: false,
-        arrivalTime: "",
-        pickupStatus: "Waiting",
-        checkoutTime: "",
-        createdAt: serverTimestamp(),
-      });
-
-      alert("Customer verified and added.");
-
-      setFullName("");
-      setOrderNumber("");
-      setDateOfBirth("");
-      setIdNumber("");
-      setIdExpiration("");
-      setScanResult("");
-      setVerificationMethod("manual");
+      setWorkingOrderId(order.orderId || order.id);
+      await approvePreorder(order);
     } catch (error) {
-      console.error("Error saving customer:", error);
-      alert("There was a problem saving this customer.");
+      console.error("Error approving preorder:", error);
+      alert("There was a problem approving this preorder.");
     } finally {
-      setSaving(false);
+      setWorkingOrderId("");
+    }
+  };
+
+  const handleReject = async (order) => {
+    try {
+      setWorkingOrderId(order.orderId || order.id);
+      await rejectPreorder(order);
+    } catch (error) {
+      console.error("Error rejecting preorder:", error);
+      alert("There was a problem rejecting this preorder.");
+    } finally {
+      setWorkingOrderId("");
     }
   };
 
   return (
     <div style={pageStyle}>
-      <div style={topGridStyle}>
-        <div style={cardStyle}>
-          <h1 style={headingStyle}>ID Verification Scanner</h1>
+      <div style={headerStyle}>
+        <div>
+          <h1 style={headingStyle}>Preorder Verification Queue</h1>
           <p style={subheadingStyle}>
-            Scan a driver&apos;s license or enter customer ID details manually.
+            Review pending preorders, approve eligible customers, or reject
+            invalid submissions.
           </p>
-
-          <div id="reader" style={{ width: "100%" }} />
-
-          {scanResult ? (
-            <div style={scanResultStyle}>
-              <strong>Scan captured.</strong> Form fields were auto-filled where possible.
-            </div>
-          ) : null}
         </div>
-
-        <div style={cardStyle}>
-          <h2 style={sectionHeadingStyle}>Verification Review</h2>
-
-          <div style={statusGridStyle}>
-            <div style={miniCardStyle}>
-              <div style={miniLabelStyle}>Age</div>
-              <div style={miniValueStyle}>{age || "—"}</div>
-            </div>
-
-            <div style={miniCardStyle}>
-              <div style={miniLabelStyle}>21+ Status</div>
-              <div style={miniValueStyle}>
-                <span style={getBadgeStyle(is21Plus ? "Verified" : "Under 21")}>
-                  {dateOfBirth ? (is21Plus ? "Verified" : "Under 21") : "Pending"}
-                </span>
-              </div>
-            </div>
-
-            <div style={miniCardStyle}>
-              <div style={miniLabelStyle}>ID Expiration</div>
-              <div style={miniValueStyle}>
-                <span style={getBadgeStyle(!idExpiration ? "Pending" : isExpired ? "Expired" : "Valid")}>
-                  {!idExpiration ? "Pending" : isExpired ? "Expired" : "Valid"}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <form onSubmit={handleSaveCustomer}>
-            <label style={labelStyle}>Full Name</label>
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Jordan Parker"
-              style={inputStyle}
-            />
-
-            <label style={labelStyle}>Order Number</label>
-            <input
-              type="text"
-              value={orderNumber}
-              onChange={(e) => setOrderNumber(e.target.value)}
-              placeholder="#1005"
-              style={inputStyle}
-            />
-
-            <label style={labelStyle}>Date of Birth</label>
-            <input
-              type="date"
-              value={dateOfBirth}
-              onChange={(e) => setDateOfBirth(e.target.value)}
-              style={inputStyle}
-            />
-
-            <label style={labelStyle}>ID Number</label>
-            <input
-              type="text"
-              value={idNumber}
-              onChange={(e) => setIdNumber(e.target.value)}
-              placeholder="Driver license number"
-              style={inputStyle}
-            />
-
-            <label style={labelStyle}>ID Expiration</label>
-            <input
-              type="date"
-              value={idExpiration}
-              onChange={(e) => setIdExpiration(e.target.value)}
-              style={inputStyle}
-            />
-
-            <label style={labelStyle}>Verification Method</label>
-            <input
-              type="text"
-              value={verificationMethod}
-              readOnly
-              style={{ ...inputStyle, backgroundColor: "#f8faf8" }}
-            />
-
-            <button type="submit" style={buttonStyle} disabled={saving}>
-              {saving ? "Saving..." : "Verify and Save Customer"}
-            </button>
-          </form>
+        <div style={queueCountStyle}>
+          {pendingOrders.length} pending review
         </div>
       </div>
+
+      {pendingOrders.length === 0 ? (
+        <div style={emptyCardStyle}>
+          No preorders are waiting for verification.
+        </div>
+      ) : (
+        <div style={cardGridStyle}>
+          {pendingOrders.map((order) => {
+            const orderId = order.orderId || order.id;
+            const isWorking = workingOrderId === orderId;
+            const idUploads = order.idUploads || {};
+
+            return (
+              <article key={orderId} style={queueCardStyle}>
+                <div style={cardTopStyle}>
+                  <div>
+                    <h2 style={cardTitleStyle}>
+                      {order.customerName || order.name}
+                    </h2>
+                    <div style={cardMetaStyle}>
+                      {order.orderNumber || order.order}
+                    </div>
+                  </div>
+                  <span style={badgeStyle("#fff4d6", "#8a6500")}>
+                    {formatStatusLabel(order.idVerificationStatus)}
+                  </span>
+                </div>
+
+                <div style={detailsGridStyle}>
+                  <div style={detailCardStyle}>
+                    <div style={detailLabelStyle}>Pickup Window</div>
+                    <div style={detailValueStyle}>
+                      {order.pickupWindow || "Not set"}
+                    </div>
+                  </div>
+                  <div style={detailCardStyle}>
+                    <div style={detailLabelStyle}>Items</div>
+                    <div style={detailValueStyle}>{order.itemCount || 0}</div>
+                  </div>
+                  <div style={detailCardStyle}>
+                    <div style={detailLabelStyle}>Subtotal</div>
+                    <div style={detailValueStyle}>
+                      {formatCurrency(order.subtotal || 0)}
+                    </div>
+                  </div>
+                  <div style={detailCardStyle}>
+                    <div style={detailLabelStyle}>ID Uploaded</div>
+                    <div style={detailValueStyle}>
+                      {order.idUploadComplete ? "Yes" : "No"}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={uploadsPanelStyle}>
+                  <div style={panelHeadingStyle}>Uploaded ID</div>
+                  <div style={uploadLinksStyle}>
+                    {idUploads.frontDownloadUrl ? (
+                      <a
+                        href={idUploads.frontDownloadUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={linkStyle}
+                      >
+                        Front of ID
+                      </a>
+                    ) : (
+                      <span style={missingTextStyle}>Front missing</span>
+                    )}
+                    {idUploads.backDownloadUrl ? (
+                      <a
+                        href={idUploads.backDownloadUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={linkStyle}
+                      >
+                        Back of ID
+                      </a>
+                    ) : (
+                      <span style={missingTextStyle}>Back missing</span>
+                    )}
+                  </div>
+                </div>
+
+                {(order.orderItems || []).length ? (
+                  <div style={itemsPanelStyle}>
+                    <div style={panelHeadingStyle}>Preorder Summary</div>
+                    {order.orderItems.map((item) => (
+                      <div key={item.id} style={itemRowStyle}>
+                        <span>
+                          {item.quantity} x {item.name}
+                        </span>
+                        <strong>
+                          {formatCurrency(
+                            (item.specialPrice || item.price) * item.quantity
+                          )}
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div style={actionRowStyle}>
+                  <button
+                    type="button"
+                    style={approveButtonStyle}
+                    onClick={() => handleApprove(order)}
+                    disabled={isWorking || !order.idUploadComplete}
+                  >
+                    {isWorking ? "Updating..." : "Approve Preorder"}
+                  </button>
+                  <button
+                    type="button"
+                    style={rejectButtonStyle}
+                    onClick={() => handleReject(order)}
+                    disabled={isWorking}
+                  >
+                    Reject
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-function calculateAge(dobString) {
-  if (!dobString) return 0;
-
-  const dob = new Date(dobString);
-  if (Number.isNaN(dob.getTime())) return 0;
-
-  const today = new Date();
-  let years = today.getFullYear() - dob.getFullYear();
-  const monthDiff = today.getMonth() - dob.getMonth();
-
-  if (
-    monthDiff < 0 ||
-    (monthDiff === 0 && today.getDate() < dob.getDate())
-  ) {
-    years--;
-  }
-
-  return years;
-}
-
-function isDateExpired(dateString) {
-  if (!dateString) return false;
-
-  const exp = new Date(dateString);
-  if (Number.isNaN(exp.getTime())) return false;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  exp.setHours(0, 0, 0, 0);
-
-  return exp < today;
-}
-
-function parseScannedText(text) {
-  const result = {
-    fullName: "",
-    dateOfBirth: "",
-    idNumber: "",
-    idExpiration: "",
-  };
-
-  const normalized = text.replace(/\r/g, "\n");
-
-  const dobMatch =
-    normalized.match(/\b(19\d{2}|20\d{2})[-/](\d{2})[-/](\d{2})\b/) ||
-    normalized.match(/\b(\d{2})[-/](\d{2})[-/](19\d{2}|20\d{2})\b/);
-
-  if (dobMatch) {
-    if (dobMatch[1].length === 4) {
-      result.dateOfBirth = `${dobMatch[1]}-${dobMatch[2]}-${dobMatch[3]}`;
-    } else {
-      result.dateOfBirth = `${dobMatch[3]}-${dobMatch[1]}-${dobMatch[2]}`;
-    }
-  }
-
-  const expMatch =
-    normalized.match(/EXP[:\s]*((19|20)\d{2}[-/]\d{2}[-/]\d{2})/i) ||
-    normalized.match(/EXP[:\s]*(\d{2}[-/]\d{2}[-/](19|20)\d{2})/i);
-
-  if (expMatch) {
-    const raw = expMatch[1];
-    const parts = raw.split(/[-/]/);
-    if (parts[0].length === 4) {
-      result.idExpiration = `${parts[0]}-${parts[1]}-${parts[2]}`;
-    } else {
-      result.idExpiration = `${parts[2]}-${parts[0]}-${parts[1]}`;
-    }
-  }
-
-  const lines = normalized
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  const possibleName = lines.find(
-    (line) =>
-      /^[A-Za-z ,.'-]{5,}$/.test(line) &&
-      !line.toLowerCase().includes("driver") &&
-      !line.toLowerCase().includes("license")
-  );
-
-  if (possibleName) {
-    result.fullName = toTitleCase(possibleName.replace(",", " "));
-  }
-
-  const idMatch = normalized.match(/\b[A-Z0-9]{6,20}\b/);
-  if (idMatch) {
-    result.idNumber = idMatch[0];
-  }
-
-  return result;
-}
-
-function toTitleCase(value) {
-  return value
-    .toLowerCase()
-    .split(" ")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function getBadgeStyle(text) {
-  let backgroundColor = "#edf2ee";
-  let color = "#234333";
-
-  if (text === "Verified" || text === "Valid") {
-    backgroundColor = "#dff3e8";
-    color = "#17633c";
-  }
-
-  if (text === "Under 21" || text === "Expired") {
-    backgroundColor = "#fde2e2";
-    color = "#a12626";
-  }
-
-  if (text === "Pending") {
-    backgroundColor = "#fff4d6";
-    color = "#8a6500";
-  }
-
+function badgeStyle(backgroundColor, color) {
   return {
     display: "inline-block",
     padding: "6px 10px",
     borderRadius: "999px",
     fontSize: "12px",
-    fontWeight: "bold",
+    fontWeight: "700",
     backgroundColor,
     color,
   };
@@ -357,97 +202,173 @@ const pageStyle = {
   fontFamily: "Arial, sans-serif",
 };
 
-const topGridStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
-  gap: "24px",
-};
-
-const cardStyle = {
-  backgroundColor: "#ffffff",
-  borderRadius: "14px",
-  padding: "24px",
-  boxShadow: "0 4px 14px rgba(0, 0, 0, 0.08)",
-  border: "1px solid #e6ece8",
+const headerStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "16px",
+  flexWrap: "wrap",
+  marginBottom: "24px",
 };
 
 const headingStyle = {
-  marginTop: 0,
+  margin: 0,
   color: "#163126",
   fontSize: "32px",
 };
 
-const sectionHeadingStyle = {
-  marginTop: 0,
-  color: "#163126",
-  fontSize: "24px",
-};
-
 const subheadingStyle = {
+  marginTop: "8px",
   color: "#5c6b63",
-  marginBottom: "20px",
+  fontSize: "15px",
 };
 
-const scanResultStyle = {
-  marginTop: "16px",
-  backgroundColor: "#e3eefc",
-  color: "#2057a6",
-  padding: "12px 14px",
-  borderRadius: "8px",
-  fontSize: "14px",
+const queueCountStyle = {
+  borderRadius: "999px",
+  backgroundColor: "#163126",
+  color: "#ffffff",
+  padding: "10px 14px",
+  fontWeight: "700",
 };
 
-const statusGridStyle = {
+const emptyCardStyle = {
+  backgroundColor: "#ffffff",
+  borderRadius: "16px",
+  padding: "24px",
+  border: "1px solid #e6ece8",
+  color: "#5c6b63",
+};
+
+const cardGridStyle = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-  gap: "12px",
-  marginBottom: "20px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+  gap: "18px",
 };
 
-const miniCardStyle = {
+const queueCardStyle = {
+  backgroundColor: "#ffffff",
+  borderRadius: "18px",
+  padding: "22px",
+  border: "1px solid #e6ece8",
+  boxShadow: "0 6px 18px rgba(0, 0, 0, 0.06)",
+};
+
+const cardTopStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "12px",
+  alignItems: "flex-start",
+};
+
+const cardTitleStyle = {
+  margin: 0,
+  color: "#163126",
+  fontSize: "22px",
+};
+
+const cardMetaStyle = {
+  marginTop: "6px",
+  color: "#5c6b63",
+  fontSize: "13px",
+};
+
+const detailsGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+  gap: "12px",
+  marginTop: "18px",
+};
+
+const detailCardStyle = {
+  borderRadius: "14px",
   backgroundColor: "#f8faf8",
   border: "1px solid #e6ece8",
-  borderRadius: "12px",
   padding: "14px",
 };
 
-const miniLabelStyle = {
+const detailLabelStyle = {
   color: "#5c6b63",
-  fontSize: "13px",
-  marginBottom: "8px",
+  fontSize: "12px",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  marginBottom: "6px",
 };
 
-const miniValueStyle = {
+const detailValueStyle = {
   color: "#163126",
-  fontSize: "18px",
-  fontWeight: "bold",
+  fontWeight: "700",
 };
 
-const labelStyle = {
-  display: "block",
-  marginBottom: "8px",
+const uploadsPanelStyle = {
   marginTop: "16px",
+  borderRadius: "14px",
+  backgroundColor: "#fbfcfb",
+  border: "1px solid #e6ece8",
+  padding: "14px",
+};
+
+const itemsPanelStyle = {
+  marginTop: "16px",
+  borderRadius: "14px",
+  backgroundColor: "#fbfcfb",
+  border: "1px solid #e6ece8",
+  padding: "14px",
+};
+
+const panelHeadingStyle = {
   color: "#163126",
-  fontWeight: "bold",
+  fontWeight: "700",
+  marginBottom: "10px",
 };
 
-const inputStyle = {
-  width: "100%",
-  padding: "12px",
-  borderRadius: "8px",
-  border: "1px solid #cfd8d3",
-  fontSize: "14px",
-  boxSizing: "border-box",
+const uploadLinksStyle = {
+  display: "flex",
+  gap: "12px",
+  flexWrap: "wrap",
 };
 
-const buttonStyle = {
+const linkStyle = {
+  color: "#17633c",
+  fontWeight: "700",
+  textDecoration: "none",
+};
+
+const missingTextStyle = {
+  color: "#8a6500",
+  fontWeight: "700",
+};
+
+const itemRowStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "12px",
+  marginBottom: "8px",
+  color: "#1f2e27",
+};
+
+const actionRowStyle = {
+  display: "flex",
+  gap: "10px",
+  flexWrap: "wrap",
+  marginTop: "18px",
+};
+
+const approveButtonStyle = {
   backgroundColor: "#1f7a4d",
   color: "#ffffff",
   border: "none",
-  borderRadius: "8px",
-  padding: "12px 18px",
+  borderRadius: "10px",
+  padding: "12px 16px",
   cursor: "pointer",
-  fontWeight: "bold",
-  marginTop: "20px",
-  width: "100%",
+  fontWeight: "700",
+};
+
+const rejectButtonStyle = {
+  backgroundColor: "#7d2d2d",
+  color: "#ffffff",
+  border: "none",
+  borderRadius: "10px",
+  padding: "12px 16px",
+  cursor: "pointer",
+  fontWeight: "700",
 };
