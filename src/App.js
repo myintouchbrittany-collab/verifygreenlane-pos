@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
@@ -153,3 +154,14 @@ function App() {
 }
 
 export default App;
+=======
+function App() {
+  return (
+    <div style={{ padding: "40px", fontSize: "28px", color: "black", backgroundColor: "white" }}>
+      Greenlane POS test screen
+    </div>
+  );
+}
+
+export default App;
+>>>>>>> 8070e837610af96f45ad487e4de6ed05f7428e57
