@@ -1,0 +1,103 @@
+import React from "react";
+import { calculateCartTotals, validateCustomerForSale } from "./compliance.js";
+
+function Checkout({ selectedState, customers = [], orders = [], onPickup }) {
+  const readyOrders = orders.filter((order) => order.status === "ready");
+
+  return (
+    <div>
+      <h2 style={{ marginTop: 0 }}>Checkout Summary</h2>
+      <p>Review ready orders and compliance totals before completing pickup.</p>
+
+      {readyOrders.length === 0 ? (
+        <p>No ready orders available for checkout.</p>
+      ) : (
+        readyOrders.map((order) => {
+          const customer = customers.find(
+            (entry) => entry.customerId === order.customerId
+          );
+
+          const cart = [
+            {
+              flowerGrams: order.flowerGrams,
+              concentrateGrams: order.concentrateGrams,
+              infusedMg: order.infusedMg,
+              totalGrams: order.totalGrams,
+              quantity: order.quantity
+            }
+          ];
+
+          const totals = calculateCartTotals(cart);
+          const compliance = customer
+            ? validateCustomerForSale(selectedState, customer, cart)
+            : { valid: false, reason: "Customer not found." };
+
+          return (
+            <div key={order.id} style={cardStyle}>
+              <h3 style={{ margin: "0 0 8px 0" }}>{order.item}</h3>
+              <p style={{ margin: "0 0 6px 0" }}>
+                Customer: <strong>{order.customerId}</strong>
+              </p>
+              <p style={{ margin: "0 0 6px 0" }}>
+                Quantity: <strong>{order.quantity}</strong>
+              </p>
+              <p style={{ margin: "0 0 6px 0" }}>
+                Flower grams: <strong>{totals.flowerGrams}</strong>
+              </p>
+              <p style={{ margin: "0 0 6px 0" }}>
+                Concentrate grams: <strong>{totals.concentrateGrams}</strong>
+              </p>
+              <p style={{ margin: "0 0 6px 0" }}>
+                Infused THC mg: <strong>{totals.infusedMg}</strong>
+              </p>
+              <p style={{ margin: "0 0 12px 0" }}>
+                Total grams: <strong>{totals.totalGrams}</strong>
+              </p>
+
+              <div
+                style={{
+                  marginBottom: "12px",
+                  padding: "10px",
+                  borderRadius: "8px",
+                  backgroundColor: compliance.valid ? "#dcfce7" : "#fee2e2",
+                  color: compliance.valid ? "#166534" : "#991b1b"
+                }}
+              >
+                {compliance.valid
+                  ? "Compliance check passed."
+                  : compliance.reason}
+              </div>
+
+              <button
+                onClick={() => onPickup(order.id)}
+                disabled={!compliance.valid}
+                style={{
+                  backgroundColor: compliance.valid ? "#7c3aed" : "#94a3b8",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "10px 14px",
+                  cursor: compliance.valid ? "pointer" : "not-allowed",
+                  fontWeight: "600"
+                }}
+              >
+                Complete Checkout
+              </button>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+const cardStyle = {
+  backgroundColor: "white",
+  border: "1px solid #d1d5db",
+  borderRadius: "12px",
+  padding: "16px",
+  marginBottom: "12px",
+  boxShadow: "0 2px 6px rgba(0,0,0,0.05)"
+};
+
+export default Checkout;

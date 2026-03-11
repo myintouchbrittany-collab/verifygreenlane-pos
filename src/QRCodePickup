@@ -1,0 +1,58 @@
+import React from "react";
+import QRCode from "qrcode.react";
+
+function QRCodePickup({ orders }) {
+
+  if (!orders.length) {
+    return <p>No active orders to generate QR codes.</p>;
+  }
+
+  return (
+    <div>
+      <h2>Customer Pickup QR Codes</h2>
+      <p>Customers can scan these at check-in.</p>
+
+      {orders.map(order => {
+
+        const pickupCode = JSON.stringify({
+          orderId: order.id,
+          customer: order.customerId
+        });
+
+        return (
+          <div key={order.id} style={cardStyle}>
+
+            <h3>{order.customerId}</h3>
+
+            <p>Order Item: {order.item}</p>
+            <p>Quantity: {order.quantity}</p>
+
+            <QRCode
+              value={pickupCode}
+              size={180}
+              bgColor="#ffffff"
+              fgColor="#000000"
+              level="H"
+            />
+
+            <p style={{marginTop:"10px"}}>
+              Scan this QR at the dispensary check-in
+            </p>
+
+          </div>
+        );
+
+      })}
+    </div>
+  );
+}
+
+const cardStyle = {
+  padding:"20px",
+  marginBottom:"20px",
+  borderRadius:"10px",
+  border:"1px solid #ddd",
+  background:"white"
+};
+
+export default QRCodePickup;

@@ -1,0 +1,55 @@
+import React, { useEffect, useRef, useState } from "react";
+import { BrowserMultiFormatReader } from "@zxing/browser";
+
+function IDScanner() {
+  const videoRef = useRef(null);
+  const [result, setResult] = useState("");
+
+  useEffect(() => {
+    const codeReader = new BrowserMultiFormatReader();
+
+    codeReader
+      .decodeFromVideoDevice(null, videoRef.current, (res, err) => {
+        if (res) {
+          setResult(res.getText());
+        }
+      })
+      .catch(console.error);
+
+    return () => {
+      codeReader.reset();
+    };
+  }, []);
+
+  return (
+    <div>
+      <h2>ID Scanner</h2>
+
+      <video
+        ref={videoRef}
+        style={{
+          width: "100%",
+          maxWidth: "500px",
+          borderRadius: "10px"
+        }}
+      />
+
+      <div style={{ marginTop: "20px" }}>
+        <strong>Scanned Data:</strong>
+
+        <div
+          style={{
+            padding: "12px",
+            background: "#f3f4f6",
+            borderRadius: "8px",
+            marginTop: "10px"
+          }}
+        >
+          {result || "Waiting for scan..."}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default IDScanner;

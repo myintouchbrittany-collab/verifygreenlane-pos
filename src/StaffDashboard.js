@@ -1,123 +1,140 @@
-import { useEffect, useState } from "react";
-import { db } from "./firebase";
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  doc,
-  updateDoc,
-  serverTimestamp
-} from "firebase/firestore";
+import React from "react";
 
-export default function StaffDashboard() {
-  const [checkedIn, setCheckedIn] = useState([]);
-  const [prepping, setPrepping] = useState([]);
-  const [ready, setReady] = useState([]);
+function StaffDashboard({ customers = [], orders = [], onUpdateStatus, onPickup }) {
+  const checkedInCustomers = customers.filter((customer) => customer.status === "checked-in");
+  const pendingOrders = orders.filter((order) => order.status === "pending");
+  const fulfillingOrders = orders.filter((order) => order.status === "fulfilling");
+  const readyOrders = orders.filter((order) => order.status === "ready");
 
-  useEffect(() => {
-    const qCheckedIn = query(collection(db, "orders"), where("status", "==", "CHECKED_IN"));
-    const qPrepping = query(collection(db, "orders"), where("status", "==", "PREPPING"));
-    const qReady = query(collection(db, "orders"), where("status", "==", "READY"));
+  return (
+    <div>
+      <h2 style={{ marginTop: 0 }}>Fulfillment Board</h2>
 
-    const unsub1 = onSnapshot(qCheckedIn, (snap) =>
-      setCheckedIn(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    );
-    const unsub2 = onSnapshot(qPrepping, (snap) =>
-      setPrepping(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    );
-    const unsub3 = onSnapshot(qReady, (snap) =>
-      setReady(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    );
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: "20px",
+          marginTop: "20px"
+        }}
+      >
+        <div style={columnStyle}>
+          <h3>Checked In</h3>
+          {checkedInCustomers.length === 0 ? (
+            <p>No checked-in customers.</p>
+          ) : (
+            checkedInCustomers.map((customer) => (
+              <div key={customer.id} style={cardStyle}>
+                <strong>{customer.customerId}</strong>
+                <div style={smallText}>Age: {customer.age}</div>
+                {customer.residencyStatus && (
+                  <div style={smallText}>Residency: {customer.residencyStatus}</div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
 
-    return () => {
-      unsub1();
-      unsub2();
-      unsub3();
-    };
-  }, []);
+        <div style={columnStyle}>
+          <h3>Pending</h3>
+          {pendingOrders.length === 0 ? (
+            <p>No pending purchases.</p>
+          ) : (
+            pendingOrders.map((order) => (
+              <div key={order.id} style={cardStyle}>
+                <strong>{order.item}</strong>
+                <div style={smallText}>{order.customerId}</div>
+                <div style={smallText}>Qty: {order.quantity}</div>
+                <button
+                  onClick={() => onUpdateStatus(order.id, "fulfilling")}
+                  style={actionButton("#f59e0b")}
+                >
+                  Start Fulfilling
+                </button>
+              </div>
+            ))
+          )}
+        </div>
 
-  const setStatus = async (orderId, status) => {
-    try {
-      const updates = { status };
+        <div style={columnStyle}>
+          <h3>Fulfilling</h3>
+          {fulfillingOrders.length === 0 ? (
+            <p>No orders in fulfillment.</p>
+          ) : (
+            fulfillingOrders.map((order) => (
+              <div key={order.id} style={cardStyle}>
+                <strong>{order.item}</strong>
+                <div style={smallText}>{order.customerId}</div>
+                <div style={smallText}>Qty: {order.quantity}</div>
+                <button
+                  onClick={() => onUpdateStatus(order.id, "ready")}
+                  style={actionButton("#22c55e")}
+                >
+                  Mark Ready
+                </button>
+              </div>
+            ))
+          )}
+        </div>
 
-      if (status === "PREPPING") updates.prepStartedAt = serverTimestamp();
-      if (status === "READY") updates.readyAt = serverTimestamp();
-      if (status === "COMPLETED") updates.completedAt = serverTimestamp();
-
-      await updateDoc(doc(db, "orders", orderId), updates);
-    } catch (err) {
-      console.error(err);
-      alert("Error updating status");
-    }
-  };
-
-  const Card = ({ o, actions }) => (
-    <div style={{ border: "1px solid #ddd", padding: 12, borderRadius: 10, marginBottom: 10 }}>
-      <div><strong>Name:</strong> {o.customerName}</div>
-      <div><strong>DOB:</strong> {o.dob}</div>
-      <div><strong>Status:</strong> {o.status}</div>
-      <div style={{ marginTop: 10 }}>{actions}</div>
-      <div style={{ marginTop: 6, fontSize: 12, color: "#666" }}>
-        Order ID: {o.id}
+        <div style={columnStyle}>
+          <h3>Ready for Pickup</h3>
+          {readyOrders.length === 0 ? (
+            <p>No ready orders.</p>
+          ) : (
+            readyOrders.map((order) => (
+              <div key={order.id} style={cardStyle}>
+                <strong>{order.item}</strong>
+                <div style={smallText}>{order.customerId}</div>
+                <div style={smallText}>Qty: {order.quantity}</div>
+                <button
+                  onClick={() => onPickup(order.id)}
+                  style={actionButton("#7c3aed")}
+                >
+                  Complete Pickup
+                </button>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
-
-  return (
-    <div style={{ padding: 10 }}>
-      <h2>Staff Prep Board</h2>
-
-      <h3>Checked In</h3>
-      {checkedIn.length === 0 ? (
-        <p>No checked-in customers.</p>
-      ) : (
-        checkedIn.map((o) => (
-          <Card
-            key={o.id}
-            o={o}
-            actions={
-              <button onClick={() => setStatus(o.id, "PREPPING")}>
-                Start Prep
-              </button>
-            }
-          />
-        ))
-      )}
-
-      <h3>Prepping</h3>
-      {prepping.length === 0 ? (
-        <p>No orders prepping.</p>
-      ) : (
-        prepping.map((o) => (
-          <Card
-            key={o.id}
-            o={o}
-            actions={
-              <button onClick={() => setStatus(o.id, "READY")}>
-                Mark Ready
-              </button>
-            }
-          />
-        ))
-      )}
-
-      <h3>Ready</h3>
-      {ready.length === 0 ? (
-        <p>No ready orders.</p>
-      ) : (
-        ready.map((o) => (
-          <Card
-            key={o.id}
-            o={o}
-            actions={
-              <button onClick={() => setStatus(o.id, "COMPLETED")}>
-                Complete Pickup
-              </button>
-            }
-          />
-        ))
-      )}
-    </div>
-  );
 }
+
+const columnStyle = {
+  backgroundColor: "#f8fafc",
+  padding: "16px",
+  borderRadius: "12px",
+  border: "1px solid #e5e7eb",
+  minHeight: "320px"
+};
+
+const cardStyle = {
+  backgroundColor: "white",
+  padding: "12px",
+  borderRadius: "8px",
+  marginBottom: "10px",
+  border: "1px solid #d1d5db",
+  boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+};
+
+const smallText = {
+  marginTop: "4px",
+  fontSize: "14px",
+  color: "#475569"
+};
+
+const actionButton = (backgroundColor) => ({
+  marginTop: "10px",
+  backgroundColor,
+  color: "white",
+  border: "none",
+  borderRadius: "8px",
+  padding: "8px 12px",
+  cursor: "pointer",
+  fontWeight: "600",
+  width: "100%"
+});
+
+export default StaffDashboard;

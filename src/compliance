@@ -1,0 +1,93 @@
+import { STATE_CONFIG } from "./stateConfig.js";
+
+export function calculateCartTotals(cart = []) {
+  return cart.reduce(
+    (totals, item) => {
+      const quantity = Number(item.quantity || 0);
+
+      totals.flowerGrams += Number(item.flowerGrams || 0) * quantity;
+      totals.concentrateGrams += Number(item.concentrateGrams || 0) * quantity;
+      totals.infusedMg += Number(item.infusedMg || 0) * quantity;
+      totals.totalGrams += Number(item.totalGrams || 0) * quantity;
+
+      return totals;
+    },
+    {
+      flowerGrams: 0,
+      concentrateGrams: 0,
+      infusedMg: 0,
+      totalGrams: 0
+    }
+  );
+}
+
+export function validateAge(customer, minimumAge = 21) {
+  if (!customer?.age) {
+    return { valid: false, reason: "Customer age is missing." };
+  }
+
+  if (Number(customer.age) < minimumAge) {
+    return { valid: false, reason: `Customer must be at least ${minimumAge}.` };
+  }
+
+  return { valid: true };
+}
+
+export function validateMichiganSale(customer, cart) {
+  const ageCheck = validateAge(customer, STATE_CONFIG.michigan.minimumAge);
+  if (!ageCheck.valid) return ageCheck;
+
+  const totals = calculateCartTotals(cart);
+
+  if (totals.totalGrams > STATE_CONFIG.michigan.limits.maxTotalGrams) {
+    return {
+      valid: false,
+      reason: "Michigan limit exceeded: total transaction is over 2.5 ounces."
+    };
+  }
+
+  if (totals.concentrateGrams > STATE_CONFIG.michigan.limits.maxConcentrateGrams) {
+    return {
+      valid: false,
+      reason: "Michigan limit exceeded: concentrate is over 15 grams."
+    };
+  }
+
+  return { valid: true, totals };
+}
+
+export function validateIllinoisSale(customer, cart) {
+  const ageCheck = validateAge(customer, STATE_CONFIG.illinois.minimumAge);
+  if (!ageCheck.valid) return ageCheck;
+
+  if (!customer?.residencyStatus) {
+    return { valid: false, reason: "Illinois requires residency status." };
+  }
+
+  const totals = calculateCartTotals(cart);
+  const limits =
+    customer.residencyStatus === "resident"
+      ? STATE_CONFIG.illinois.limits.resident
+      : STATE_CONFIG.illinois.limits.nonResident;
+
+  if (totals.flowerGrams > limits.maxFlowerGrams) {
+    return { valid: false, reason: "Illinois flower limit exceeded." };
+  }
+
+  if (totals.concentrateGrams > limits.maxConcentrateGrams) {
+    return { valid: false, reason: "Illinois concentrate limit exceeded." };
+  }
+
+  if (totals.infusedMg > limits.maxInfusedMg) {
+    return { valid: false, reason: "Illinois infused THC limit exceeded." };
+  }
+
+  return { valid: true, totals };
+}
+
+export function validateCustomerForSale(stateKey, customer, cart) {
+  if (stateKey === "michigan") return validateMichiganSale(customer, cart);
+  if (stateKey === "illinois") return validateIllinoisSale(customer, cart);
+
+  return { valid: false, reason: "Unsupported state." };
+}

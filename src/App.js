@@ -1,276 +1,155 @@
-```javascript
-import { useState, useEffect } from "react";
-import "./App.css";
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from "react-router-dom";
+import { signOut } from "firebase/auth";
 
-import { db } from "./firebase";
-import { QRCodeCanvas } from "qrcode.react";
+import { auth } from "./firebase";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import CheckIn from "./pages/CheckIn";
+import VerifyID from "./pages/VerifyID";
+import CustomerUpload from "./pages/CustomerUpload";
+import CustomerStatus from "./pages/CustomerStatus";
+import Checkout from "./pages/Checkout";
+import Completed from "./pages/Completed";
+import ProtectedRoute from "./components/ProtectedRoute";
 
-import {
-  collection,
-  addDoc,
-  doc,
-  updateDoc,
-  serverTimestamp,
-  onSnapshot
-} from "firebase/firestore";
+function Navigation() {
+  const navigate = useNavigate();
 
-import StaffDashboard from "./StaffDashboard";
-import Scanner from "./Scanner";
-
-function parseDOB(dobStr) {
-  const parts = dobStr.split("/");
-  if (parts.length !== 3) return null;
-
-  const mm = parseInt(parts[0], 10);
-  const dd = parseInt(parts[1], 10);
-  const yyyy = parseInt(parts[2], 10);
-
-  if (!mm || !dd || !yyyy) return null;
-
-  const d = new Date(yyyy, mm - 1, dd);
-
-  if (d.getFullYear() !== yyyy || d.getMonth() !== mm - 1 || d.getDate() !== dd) {
-    return null;
-  }
-
-  return d;
-}
-
-function is21OrOlder(dobDate) {
-  const today = new Date();
-  const cutoff = new Date(
-    today.getFullYear() - 21,
-    today.getMonth(),
-    today.getDate()
-  );
-  return dobDate <= cutoff;
-}
-
-function App() {
-
-  const [mode, setMode] = useState("customer");
-
-  const [name, setName] = useState("");
-  const [dob, setDob] = useState("");
-
-  const [lastOrderId, setLastOrderId] = useState("");
-
-  const [orderStatus, setOrderStatus] = useState("");
-
-  const [orderCustomer, setOrderCustomer] = useState({
-    customerName: "",
-    dob: ""
-  });
-
-  const [statusMsg, setStatusMsg] = useState("");
-
-  useEffect(() => {
-
-    if (!lastOrderId) return;
-
-    const orderRef = doc(db, "orders", lastOrderId);
-
-    const unsubscribe = onSnapshot(orderRef, (snap) => {
-
-      if (!snap.exists()) return;
-
-      const data = snap.data();
-
-      setOrderStatus(data.status || "");
-
-      setOrderCustomer({
-        customerName: data.customerName || "",
-        dob: data.dob || ""
-      });
-
-    });
-
-    return () => unsubscribe();
-
-  }, [lastOrderId]);
-
-  const createPreorder = async () => {
-
-    setStatusMsg("");
-
-    if (!name.trim()) {
-      alert("Enter your name");
-      return;
-    }
-
-    const dobDate = parseDOB(dob);
-
-    if (!dobDate) {
-      alert("DOB must be MM/DD/YYYY");
-      return;
-    }
-
-    if (!is21OrOlder(dobDate)) {
-      alert("Must be 21+");
-      return;
-    }
-
-    try {
-
-      const newOrder = {
-        customerName: name,
-        dob: dob,
-        status: "PREORDERED",
-        checkedIn: false,
-        createdAt: serverTimestamp()
-      };
-
-      const docRef = await addDoc(collection(db, "orders"), newOrder);
-
-      setLastOrderId(docRef.id);
-
-      alert("Preorder Created");
-
-    } catch (err) {
-
-      console.error(err);
-      alert("Error creating preorder");
-
-    }
+  const linkStyle = {
+    color: "#cdebd8",
+    textDecoration: "none",
+    fontWeight: "500",
   };
 
-  const checkIn = async () => {
+  const logoutButtonStyle = {
+    backgroundColor: "#2e8b57",
+    color: "#ffffff",
+    border: "none",
+    borderRadius: "8px",
+    padding: "8px 14px",
+    cursor: "pointer",
+    fontWeight: "bold",
+  };
 
-    if (!lastOrderId) {
-      alert("Create preorder first");
-      return;
-    }
-
+  const handleLogout = async () => {
     try {
-
-      const orderRef = doc(db, "orders", lastOrderId);
-
-      await updateDoc(orderRef, {
-        status: "CHECKED_IN",
-        checkedIn: true,
-        checkedInAt: serverTimestamp()
-      });
-
-      setStatusMsg("Checked In");
-
-    } catch (err) {
-
-      console.error(err);
-      alert("Error checking in");
-
+      await signOut(auth);
+      navigate("/");
+    } catch (error) {
+      console.error("Logout failed:", error);
+      alert("Logout failed.");
     }
   };
 
   return (
-
-    <div className="container">
-
-      <div className="header">
-        <h1 className="title">GreenLane</h1>
-
-        <div className="nav">
-          <button onClick={() => setMode("customer")}>Customer</button>
-          <button onClick={() => setMode("staff")}>Staff Dashboard</button>
-          <button onClick={() => setMode("scanner")}>Scanner</button>
-        </div>
+    <nav
+      style={{
+        padding: "16px 24px",
+        background: "#163126",
+        color: "#fff",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: "12px",
+      }}
+    >
+      <div style={{ fontWeight: "bold", fontSize: "24px" }}>
+        Greenlane Verified
       </div>
 
-      {mode === "customer" && (
+      <div
+        style={{
+          display: "flex",
+          gap: "16px",
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
+        <Link style={linkStyle} to="/">Login</Link>
+        <Link style={linkStyle} to="/dashboard">Dashboard</Link>
+        <Link style={linkStyle} to="/checkin">Check-In</Link>
+        <Link style={linkStyle} to="/verify-id">Verify ID</Link>
+        <Link style={linkStyle} to="/customer-upload">Customer Upload</Link>
+        <Link style={linkStyle} to="/customer-status">Customer Status</Link>
+        <Link style={linkStyle} to="/checkout">Checkout</Link>
+        <Link style={linkStyle} to="/completed">Completed</Link>
 
-        <div className="card">
-
-          <label>Name</label>
-
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="John Smith"
-          />
-
-          <label>DOB (MM/DD/YYYY)</label>
-
-          <input
-            value={dob}
-            onChange={(e) => setDob(e.target.value)}
-            placeholder="01/01/1995"
-          />
-
-          <button onClick={createPreorder}>
-            Create Preorder
-          </button>
-
-          <button
-            onClick={checkIn}
-            disabled={!lastOrderId}
-            style={{ marginLeft: 10 }}
-          >
-            I'm Here (Check In)
-          </button>
-
-          {statusMsg && (
-            <p style={{ marginTop: 15 }}>
-              {statusMsg}
-            </p>
-          )}
-
-          {lastOrderId && (
-
-            <div className="qrBox">
-
-              <p>
-                Order ID: <strong>{lastOrderId}</strong>
-              </p>
-
-              <p>Show this QR when you arrive</p>
-
-              <QRCodeCanvas
-                value={lastOrderId}
-                size={200}
-              />
-
-            </div>
-
-          )}
-
-          {lastOrderId && (
-
-            <div className="statusBox">
-
-              <h3>Live Order Status</h3>
-
-              <p>
-                Status: <strong>{orderStatus || "Loading..."}</strong>
-              </p>
-
-              <p>
-                {orderCustomer.customerName} {orderCustomer.dob}
-              </p>
-
-              {orderStatus === "READY" && (
-                <p>✅ Your order is READY</p>
-              )}
-
-              {orderStatus === "COMPLETED" && (
-                <p>✅ Pickup Complete</p>
-              )}
-
-            </div>
-
-          )}
-
-        </div>
-
-      )}
-
-      {mode === "staff" && <StaffDashboard />}
-
-      {mode === "scanner" && <Scanner />}
-
-    </div>
-
+        <button onClick={handleLogout} style={logoutButtonStyle}>
+          Logout
+        </button>
+      </div>
+    </nav>
   );
+}
 
+function App() {
+  return (
+    <Router>
+      <div
+        style={{
+          fontFamily: "Arial, sans-serif",
+          minHeight: "100vh",
+          backgroundColor: "#f4f7f5",
+        }}
+      >
+        <Navigation />
+
+        <Routes>
+          <Route path="/" element={<Login />} />
+
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/checkin"
+            element={
+              <ProtectedRoute>
+                <CheckIn />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/verify-id"
+            element={
+              <ProtectedRoute>
+                <VerifyID />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route path="/customer-upload" element={<CustomerUpload />} />
+          <Route path="/customer-status" element={<CustomerStatus />} />
+
+          <Route
+            path="/checkout"
+            element={
+              <ProtectedRoute>
+                <Checkout />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/completed"
+            element={
+              <ProtectedRoute>
+                <Completed />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </div>
+    </Router>
+  );
 }
 
 export default App;
-```
