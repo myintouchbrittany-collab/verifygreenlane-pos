@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useOrders } from "../../context/OrdersContext";
 import {
   getOrderWorkflowLabel,
+  isCheckoutQueueOrder,
   updateOrderWorkflow,
 } from "../../services/orderService";
 import { formatCurrency, formatStatusLabel } from "../../services/orderUtils";
@@ -12,7 +13,7 @@ export default function Checkout() {
 
   const readyOrders = useMemo(() => {
     return orders
-      .filter((order) => order.orderStatus === "ready_for_pickup")
+      .filter((order) => isCheckoutQueueOrder(order))
       .filter((order) => {
         const name = (order.customerName || order.name || "").toLowerCase();
         const orderNumber = (order.orderNumber || order.order || "").toLowerCase();
@@ -25,10 +26,10 @@ export default function Checkout() {
   const completePickup = async (order) => {
     try {
       await updateOrderWorkflow(order.orderId || order.id, order.customerId, {
-        status: "completed",
         orderStatus: "completed",
         pickupStatus: "Completed",
         checkoutTime: new Date().toLocaleTimeString(),
+        completedAt: new Date().toISOString(),
       });
     } catch (error) {
       console.error("Checkout error:", error);
@@ -41,7 +42,7 @@ export default function Checkout() {
         <div>
           <h1 style={headingStyle}>Checkout</h1>
           <p style={subheadingStyle}>
-            Review preorder items, confirm completion, and close out pickup.
+            Orders that are ready for customer handoff.
           </p>
         </div>
 
@@ -68,12 +69,13 @@ export default function Checkout() {
               </div>
 
               <p><strong>Order:</strong> {order.orderNumber || order.order}</p>
+              <p><strong>Pickup Code:</strong> {order.pickupCode || "Pending"}</p>
               <p><strong>Pickup Window:</strong> {order.pickupWindow || "Not set"}</p>
               <p>
                 <strong>ID Status:</strong>{" "}
-                {formatStatusLabel(order.idVerificationStatus || "pending_verification")}
+                {formatStatusLabel(order.verificationStatus || "pending_verification")}
               </p>
-              <p><strong>Arrival Time:</strong> {order.arrivalTime || "—"}</p>
+              <p><strong>Arrival Time:</strong> {order.arrivalTime || "-"}</p>
 
               <div style={itemsCardStyle}>
                 <div style={itemsHeadingStyle}>Preorder Items</div>

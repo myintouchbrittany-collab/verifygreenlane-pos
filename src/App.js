@@ -9,16 +9,17 @@ import {
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "./firebase";
 import Login from "./pages/Login";
+import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
-import CheckIn from "./pages/CheckIn";
-import VerifyID from "./pages/VerifyID";
 import CustomerUpload from "./pages/CustomerUpload";
-import CustomerStatus from "./pages/CustomerStatus";
 import Checkout from "./pages/Checkout";
 import Completed from "./pages/Completed";
 import CustomerOrder from "./pages/CustomerOrder";
+import CustomerStatus from "./pages/CustomerStatus";
+import OrderConfirmation from "./pages/OrderConfirmation";
 import ScanPickup from "./pages/ScanPickup";
 import OrderDetail from "./pages/OrderDetail";
+import ParkingCheckIn from "./pages/ParkingCheckIn";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { OrdersProvider } from "./context/OrdersContext";
 
@@ -58,9 +59,12 @@ function Navigation() {
           Customer Order
         </Link>
         <Link style={publicLinkStyle} to="/customer-status">
-          Order Status
+          Customer Status
         </Link>
-        <Link style={publicLinkStyle} to="/">
+        <Link style={publicLinkStyle} to="/check-in">
+          Check In
+        </Link>
+        <Link style={publicLinkStyle} to="/staff-login">
           Staff Login
         </Link>
 
@@ -70,16 +74,10 @@ function Navigation() {
               Dashboard
             </Link>
             <Link style={staffLinkStyle} to="/scan-pickup">
-              Scan Pickup
-            </Link>
-            <Link style={staffLinkStyle} to="/checkin">
-              Check-In
-            </Link>
-            <Link style={staffLinkStyle} to="/verify-id">
-              Review Preorders
+              Scan
             </Link>
             <Link style={staffLinkStyle} to="/customer-upload">
-              Customer Upload
+              Customer Lookup
             </Link>
             <Link style={staffLinkStyle} to="/checkout">
               Checkout
@@ -106,10 +104,13 @@ function App() {
           <Navigation />
 
           <Routes>
-            <Route path="/" element={<Login />} />
+            <Route path="/" element={<Landing />} />
+            <Route path="/staff-login" element={<Login />} />
             <Route path="/order" element={<CustomerOrder />} />
-            <Route path="/customer-upload" element={<CustomerUpload />} />
             <Route path="/customer-status" element={<CustomerStatus />} />
+            <Route path="/check-in" element={<ParkingCheckIn />} />
+            <Route path="/order-confirmation" element={<OrderConfirmation />} />
+            <Route path="/customer-upload" element={<CustomerUpload />} />
 
             <Route
               path="/dashboard"
@@ -124,22 +125,6 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ScanPickup />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/checkin"
-              element={
-                <ProtectedRoute>
-                  <CheckIn />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/verify-id"
-              element={
-                <ProtectedRoute>
-                  <VerifyID />
                 </ProtectedRoute>
               }
             />

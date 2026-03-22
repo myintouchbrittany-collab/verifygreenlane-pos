@@ -52,7 +52,6 @@ function start(storeId = DEFAULT_STORE_ID) {
 export function subscribeToOrders(listener, storeId = DEFAULT_STORE_ID) {
   start(storeId);
   listeners.add(listener);
-  listener(mergedOrders);
 
   return () => {
     listeners.delete(listener);

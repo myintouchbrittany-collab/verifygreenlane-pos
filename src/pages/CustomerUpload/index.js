@@ -15,8 +15,8 @@ export default function CustomerUpload() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!name || !orderNumber || !frontFile || !backFile) {
-      alert("Please fill out all fields and upload front and back of ID.");
+    if (!name || !orderNumber) {
+      alert("Please fill out the customer name and order number.");
       return;
     }
 
@@ -28,12 +28,12 @@ export default function CustomerUpload() {
         customerFields: {
           name: name.trim(),
           fullName: name.trim(),
-          status: "Approved",
+          status: "approved",
           verificationStatus: "verified",
-          idUploadComplete: true,
+          idUploadComplete: Boolean(frontFile || backFile),
           idUploads: {
-            frontFileName: frontFile.name,
-            backFileName: backFile.name,
+            frontFileName: frontFile?.name || "",
+            backFileName: backFile?.name || "",
           },
         },
         orderFields: {
@@ -42,6 +42,7 @@ export default function CustomerUpload() {
           orderStatus: "approved",
           verificationStatus: "verified",
           idVerificationStatus: "verified",
+          checkInStatus: "not_arrived",
           pickupStatus: "Approved",
           source: "Staff Customer Upload",
           channel: "staff_created",
@@ -53,7 +54,7 @@ export default function CustomerUpload() {
       });
 
       alert("Customer added successfully.");
-      navigate("/checkin");
+      navigate("/dashboard");
     } catch (error) {
       console.error("Error adding customer:", error);
       alert("There was a problem saving the customer.");
@@ -67,7 +68,7 @@ export default function CustomerUpload() {
       <div style={cardStyle}>
         <h1 style={headingStyle}>Customer Upload</h1>
         <p style={subheadingStyle}>
-          Add a verified customer for express pickup.
+          Add or look up a customer without requiring ID files.
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -104,7 +105,7 @@ export default function CustomerUpload() {
           />
 
           <button type="submit" style={buttonStyle} disabled={loading}>
-            {loading ? "Saving..." : "Submit for Verification"}
+            {loading ? "Saving..." : "Save Customer"}
           </button>
         </form>
       </div>

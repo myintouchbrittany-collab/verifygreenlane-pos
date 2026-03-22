@@ -2,16 +2,16 @@ import React, { useState } from "react";
 import BarcodeScannerComponent from "react-qr-barcode-scanner";
 import { useOrders } from "../../context/OrdersContext";
 import {
+  getNormalizedWorkflowState,
+  getOrderWorkflowLabel,
+} from "../../services/orderService";
+import {
   formatCurrency,
   formatStatusLabel,
 } from "../../services/orderUtils";
-import {
-  canEnterExpressPickup,
-  getOrderWorkflowLabel,
-} from "../../services/orderService";
 
 export default function ScanPickup() {
-  const { findOrderByPickupCode, updateOrder } = useOrders();
+  const { findOrderByPickupCode } = useOrders();
   const [cameraOn, setCameraOn] = useState(true);
   const [manualCode, setManualCode] = useState("");
   const [lastScan, setLastScan] = useState("");
@@ -33,19 +33,7 @@ export default function ScanPickup() {
 
       if (!matchedOrder) {
         throw new Error(
-          "No preorder matched this code. Use a pickup QR, pickup code, or order number."
-        );
-      }
-
-      if (!matchedOrder.pickupCode) {
-        throw new Error(
-          "This preorder does not have a pickup pass yet. Staff must approve the order before it can be scanned into pickup."
-        );
-      }
-
-      if (!canEnterExpressPickup(matchedOrder)) {
-        throw new Error(
-          "Only approved express-eligible orders with verified ID can enter express pickup."
+          "No preorder matched this code. Use a pickup code, QR code, or order number."
         );
       }
 
@@ -59,37 +47,17 @@ export default function ScanPickup() {
     }
   };
 
-  const updateOrderState = async (updates) => {
-    if (!order) {
-      return;
-    }
-
-    try {
-      await updateOrder(order.orderId || order.id, updates);
-      setOrder((currentOrder) => ({
-        ...currentOrder,
-        ...updates,
-      }));
-    } catch (error) {
-      console.error("Failed to update order:", error);
-      alert("There was a problem updating this order.");
-    }
-  };
-
-  const canUseExpressLane =
-    canEnterExpressPickup(order) ||
-    (order?.orderStatus === "checked_in" &&
-      order?.verificationStatus === "verified" &&
-      order?.expressEligible);
+  const { orderStatus, verificationStatus, checkInStatus } =
+    getNormalizedWorkflowState(order);
 
   return (
     <div style={pageStyle}>
       <div style={headerStyle}>
         <div>
-          <h1 style={headingStyle}>Scan Pickup QR</h1>
+          <h1 style={headingStyle}>Scan Pickup</h1>
           <p style={subheadingStyle}>
-            Scan the customer&apos;s express pickup QR code or paste the code to
-            load the preorder and complete the handoff.
+            Lookup preorders by pickup code, QR code, or order number using the
+            shared orders source.
           </p>
         </div>
 
@@ -122,12 +90,12 @@ export default function ScanPickup() {
             <div style={emptyScannerStyle}>Camera is off.</div>
           )}
 
-          <label style={labelStyle}>Manual Pickup Code</label>
+          <label style={labelStyle}>Manual Pickup Code or Order Number</label>
           <textarea
             style={textAreaStyle}
             value={manualCode}
             onChange={(event) => setManualCode(event.target.value)}
-            placeholder="Paste QR payload or customer document ID"
+            placeholder="Paste QR payload, pickup code, or order number"
           />
 
           <button
@@ -144,9 +112,7 @@ export default function ScanPickup() {
             <div style={scanMetaValueStyle}>
               {lastScan || "No scan captured yet."}
             </div>
-            {errorMessage ? (
-              <div style={errorStyle}>{errorMessage}</div>
-            ) : null}
+            {errorMessage ? <div style={errorStyle}>{errorMessage}</div> : null}
           </div>
         </section>
 
@@ -158,17 +124,19 @@ export default function ScanPickup() {
               <div style={detailGridStyle}>
                 <div style={detailCardStyle}>
                   <div style={detailLabelStyle}>Customer</div>
-                  <div style={detailValueStyle}>{order.name}</div>
+                  <div style={detailValueStyle}>
+                    {order.customerName || order.name}
+                  </div>
                 </div>
                 <div style={detailCardStyle}>
                   <div style={detailLabelStyle}>Order</div>
-                  <div style={detailValueStyle}>{order.order}</div>
+                  <div style={detailValueStyle}>
+                    {order.orderNumber || order.order}
+                  </div>
                 </div>
                 <div style={detailCardStyle}>
-                  <div style={detailLabelStyle}>Pickup Window</div>
-                  <div style={detailValueStyle}>
-                    {order.pickupWindow || "Walk-in"}
-                  </div>
+                  <div style={detailLabelStyle}>Pickup Code</div>
+                  <div style={detailValueStyle}>{order.pickupCode || "Pending"}</div>
                 </div>
                 <div style={detailCardStyle}>
                   <div style={detailLabelStyle}>Total</div>
@@ -180,16 +148,13 @@ export default function ScanPickup() {
 
               <div style={statusRowStyle}>
                 <span style={badgeStyle("#e3eefc", "#2057a6")}>
-                  {formatStatusLabel(order.idVerificationStatus || order.status)}
-                </span>
-                <span style={badgeStyle("#dff3e8", "#17633c")}>
-                  {order.expressEligible ? "Express Eligible" : "Standard Review"}
+                  {formatStatusLabel(verificationStatus)}
                 </span>
                 <span style={badgeStyle("#fff4d6", "#8a6500")}>
                   {getOrderWorkflowLabel(order)}
                 </span>
                 <span style={badgeStyle("#dff3e8", "#17633c")}>
-                  {order.checkedIn ? "Checked In" : "Not Checked In"}
+                  {formatStatusLabel(checkInStatus)}
                 </span>
               </div>
 
@@ -210,69 +175,6 @@ export default function ScanPickup() {
                   </div>
                 ))}
               </div>
-
-              <div style={actionGroupStyle}>
-                <button
-                  type="button"
-                  style={secondaryButtonStyle}
-                  onClick={() =>
-                    updateOrderState({
-                      checkedIn: true,
-                      arrivalTime: new Date().toLocaleTimeString(),
-                      pickupStatus: "Checked In",
-                      status: "checked_in",
-                      orderStatus: "checked_in",
-                    })
-                  }
-                  disabled={order.checkedIn || !canUseExpressLane}
-                >
-                  Scan Into Express
-                </button>
-
-                <button
-                  type="button"
-                  style={secondaryButtonStyle}
-                  onClick={() =>
-                    updateOrderState({
-                      status: "ready_for_pickup",
-                      orderStatus: "ready_for_pickup",
-                      pickupStatus: "Ready for Pickup",
-                    })
-                  }
-                  disabled={
-                    !order.checkedIn ||
-                    order.orderStatus !== "checked_in" ||
-                    !canUseExpressLane
-                  }
-                >
-                  Mark Ready
-                </button>
-
-                <button
-                  type="button"
-                  style={primaryButtonStyle}
-                  onClick={() =>
-                    updateOrderState({
-                      checkedIn: true,
-                      arrivalTime:
-                        order.arrivalTime || new Date().toLocaleTimeString(),
-                      status: "completed",
-                      orderStatus: "completed",
-                      pickupStatus: "Completed",
-                      checkoutTime: new Date().toLocaleTimeString(),
-                    })
-                  }
-                  disabled={order.orderStatus !== "ready_for_pickup"}
-                >
-                  Complete Pickup
-                </button>
-              </div>
-              {!canUseExpressLane ? (
-                <div style={errorStyle}>
-                  Only approved express-eligible preorders can enter express
-                  pickup.
-                </div>
-              ) : null}
             </>
           ) : (
             <div style={emptyScannerStyle}>
@@ -500,11 +402,4 @@ const itemMetaStyle = {
   marginTop: "4px",
   color: "#5c6b63",
   fontSize: "13px",
-};
-
-const actionGroupStyle = {
-  display: "flex",
-  gap: "10px",
-  flexWrap: "wrap",
-  marginTop: "20px",
 };

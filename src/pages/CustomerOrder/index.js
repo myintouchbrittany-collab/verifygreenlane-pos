@@ -1,24 +1,38 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { storage } from "../../firebase";
 import { useOrders } from "../../context/OrdersContext";
 import { menuSections, specials } from "../../services/menuData";
+import {
+  buildPickupAvailability,
+  findPickupSlot,
+} from "../../services/pickupSlots";
 import { formatCurrency } from "../../services/orderUtils";
-import { DEFAULT_STORE_ID } from "../../services/storeConfig";
+import { saveCustomerOrderSnapshot } from "../../services/customerOrderSession";
 
 export default function CustomerOrder() {
   const navigate = useNavigate();
-  const { addOrder } = useOrders();
+  const { addOrder, orders } = useOrders();
   const [cart, setCart] = useState({});
   const [customerName, setCustomerName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [pickupWindow, setPickupWindow] = useState("");
+  const [selectedPickupDate, setSelectedPickupDate] = useState("");
+  const [selectedPickupSlotKey, setSelectedPickupSlotKey] = useState("");
   const [notes, setNotes] = useState("");
   const [frontIdFile, setFrontIdFile] = useState(null);
   const [backIdFile, setBackIdFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+
+  const resetForm = () => {
+    setCart({});
+    setCustomerName("");
+    setPhoneNumber("");
+    setSelectedPickupDate("");
+    setSelectedPickupSlotKey("");
+    setNotes("");
+    setFrontIdFile(null);
+    setBackIdFile(null);
+  };
 
   const menuItems = useMemo(
     () => menuSections.flatMap((section) => section.items),
@@ -72,6 +86,59 @@ export default function CustomerOrder() {
     };
   }, [cartItems]);
 
+  const pickupAvailability = useMemo(
+    () => buildPickupAvailability(orders),
+    [orders]
+  );
+
+  const selectedPickupDay = useMemo(
+    () =>
+      pickupAvailability.find((day) => day.dateKey === selectedPickupDate) ||
+      null,
+    [pickupAvailability, selectedPickupDate]
+  );
+
+  const selectedPickupSlot = useMemo(
+    () =>
+      (selectedPickupDay?.slots || []).find(
+        (slot) => slot.slotKey === selectedPickupSlotKey
+      ) || null,
+    [selectedPickupDay, selectedPickupSlotKey]
+  );
+
+  useEffect(() => {
+    if (!pickupAvailability.length) {
+      setSelectedPickupDate("");
+      setSelectedPickupSlotKey("");
+      return;
+    }
+
+    const hasCurrentDate = pickupAvailability.some(
+      (day) => day.dateKey === selectedPickupDate
+    );
+
+    if (!hasCurrentDate) {
+      setSelectedPickupDate(pickupAvailability[0].dateKey);
+      setSelectedPickupSlotKey("");
+    }
+  }, [pickupAvailability, selectedPickupDate]);
+
+  useEffect(() => {
+    if (!selectedPickupDate) {
+      setSelectedPickupSlotKey("");
+      return;
+    }
+
+    const slotStillAvailable = findPickupSlot(
+      pickupAvailability,
+      selectedPickupSlotKey
+    );
+
+    if (selectedPickupSlotKey && !slotStillAvailable) {
+      setSelectedPickupSlotKey("");
+    }
+  }, [pickupAvailability, selectedPickupDate, selectedPickupSlotKey]);
+
   const updateCart = (itemId, delta) => {
     setCart((currentCart) => {
       const nextQuantity = Math.max((currentCart[itemId] || 0) + delta, 0);
@@ -91,107 +158,71 @@ export default function CustomerOrder() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-
-    if (!customerName || !phoneNumber || !pickupWindow) {
-      alert("Please complete your customer details.");
-      return;
-    }
-
-    if (!cartItems.length) {
-      alert("Add at least one product to your cart.");
-      return;
-    }
-
-    if (!frontIdFile || !backIdFile) {
-      alert("Upload the front and back of your ID before submitting.");
-      return;
-    }
+    setSubmitting(true);
+    setSubmitError("");
 
     try {
-      setSubmitting(true);
-      setSubmitError("");
+      if (!customerName.trim()) {
+        throw new Error("Customer name is required.");
+      }
 
-      const tempOrderKey = Date.now().toString();
-      const frontStorageRef = ref(
-        storage,
-        `preorders/${tempOrderKey}/front-${frontIdFile.name}`
-      );
-      const backStorageRef = ref(
-        storage,
-        `preorders/${tempOrderKey}/back-${backIdFile.name}`
-      );
+      if (!phoneNumber.trim()) {
+        throw new Error("Phone number is required.");
+      }
 
-      await uploadBytes(frontStorageRef, frontIdFile);
-      await uploadBytes(backStorageRef, backIdFile);
+      if (!selectedPickupDate || !selectedPickupSlotKey) {
+        throw new Error("Pickup date and time are required.");
+      }
 
-      const [frontDownloadUrl, backDownloadUrl] = await Promise.all([
-        getDownloadURL(frontStorageRef),
-        getDownloadURL(backStorageRef),
-      ]);
+      if (!cartItems.length) {
+        throw new Error("Add at least one product before submitting.");
+      }
 
-      const result = await addOrder(
-        {
-          customerFields: {
-            name: customerName.trim(),
-            fullName: customerName.trim(),
-            phoneNumber: phoneNumber.trim(),
-            verificationStatus: "pending_verification",
-            status: "Pending Review",
-            expressEligible: false,
-            idUploadComplete: true,
-            idUploads: {
-              frontFileName: frontIdFile.name,
-              backFileName: backIdFile.name,
-              frontDownloadUrl,
-              backDownloadUrl,
-            },
-          },
-          orderFields: {
-            orderItems: cartItems.map((item) => ({
-              id: item.id,
-              productId: item.productId || item.id,
-              storeId: item.storeId || DEFAULT_STORE_ID,
-              category: item.category || "",
-              name: item.name,
-              quantity: item.quantity,
-              price: item.price,
-              size: item.size,
-              specialPrice: item.specialPrice || null,
-            })),
-            subtotal: pricing.subtotal,
-            discount: pricing.discount,
-            total: pricing.total,
-            specialsApplied: pricing.appliedSpecials,
-            pickupWindow,
-            notes: notes.trim(),
-            source: "Customer Preorder",
-            status: "pending_review",
-            orderStatus: "pending_review",
-            verificationStatus: "pending_verification",
-            idVerificationStatus: "pending_verification",
-            expressEligible: false,
-            pickupStatus: "Pending Review",
-            channel: "preorder",
-          },
-        },
-        DEFAULT_STORE_ID
-      );
-      setCart({});
-      setCustomerName("");
-      setPhoneNumber("");
-      setPickupWindow("");
-      setNotes("");
-      setFrontIdFile(null);
-      setBackIdFile(null);
-      navigate(`/customer-status?orderId=${result.orderId}`, {
+      const latestAvailability = buildPickupAvailability(orders);
+      const slotSelection = findPickupSlot(latestAvailability, selectedPickupSlotKey);
+
+      if (!slotSelection) {
+        throw new Error(
+          "That pickup slot is no longer available. Choose another time and submit again."
+        );
+      }
+
+      const items = cartItems.map((item) => ({
+        id: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.specialPrice || item.price,
+      }));
+      const savedOrder = await addOrder({
+        customerName: customerName.trim(),
+        phoneNumber: phoneNumber.trim(),
+        items,
+        subtotal: pricing.subtotal,
+        discount: pricing.discount,
+        total: pricing.total,
+        pickupDate: slotSelection.dateKey,
+        pickupTime: slotSelection.timeValue,
+        pickupSlotKey: slotSelection.slotKey,
+        pickupSlotLabel: slotSelection.label,
+        pickupWindow: slotSelection.pickupWindow,
+        idUploadComplete: Boolean(frontIdFile && backIdFile),
+        frontIdFileName: frontIdFile?.name || "",
+        backIdFileName: backIdFile?.name || "",
+        notes: notes.trim(),
+        source: "Customer Preorder",
+      });
+
+      saveCustomerOrderSnapshot(savedOrder);
+      resetForm();
+      navigate(`/customer-status?orderId=${savedOrder.orderId || savedOrder.id}`, {
         replace: true,
         state: {
-          successMessage: `Preorder ${result.orderNumber} submitted successfully.`,
+          successMessage: `Preorder ${savedOrder.orderNumber || savedOrder.orderId} submitted successfully.`,
         },
       });
     } catch (error) {
-      console.error("Error creating preorder:", error);
-      setSubmitError("There was a problem saving your preorder. Please try again.");
+      console.error("Preorder submission failed:", error);
+      setSubmitError(error.message || "Unable to submit preorder.");
     } finally {
       setSubmitting(false);
     }
@@ -383,12 +414,49 @@ export default function CustomerOrder() {
               />
 
               <label style={labelStyle}>Pickup Window</label>
-              <input
+              <select
                 style={inputStyle}
-                value={pickupWindow}
-                onChange={(event) => setPickupWindow(event.target.value)}
-                placeholder="Today 4:30 PM - 5:00 PM"
-              />
+                value={selectedPickupDate}
+                onChange={(event) => {
+                  setSelectedPickupDate(event.target.value);
+                  setSelectedPickupSlotKey("");
+                }}
+              >
+                {pickupAvailability.length ? (
+                  pickupAvailability.map((day) => (
+                    <option key={day.dateKey} value={day.dateKey}>
+                      {day.label}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">No pickup dates available</option>
+                )}
+              </select>
+
+              <label style={labelStyle}>Pickup Time Slot</label>
+              <select
+                style={inputStyle}
+                value={selectedPickupSlotKey}
+                onChange={(event) => setSelectedPickupSlotKey(event.target.value)}
+                disabled={!selectedPickupDay}
+              >
+                <option value="">Select a pickup time</option>
+                {(selectedPickupDay?.slots || []).map((slot) => (
+                  <option key={slot.slotKey} value={slot.slotKey}>
+                    {slot.label} ({slot.remainingCapacity} left)
+                  </option>
+                ))}
+              </select>
+
+              {selectedPickupSlot ? (
+                <div style={helperTextStyle}>
+                  Scheduled pickup: {selectedPickupSlot.pickupWindow}
+                </div>
+              ) : (
+                <div style={helperTextStyle}>
+                  Only open store hours with remaining capacity are shown.
+                </div>
+              )}
 
               <label style={labelStyle}>Order Notes</label>
               <textarea
@@ -779,6 +847,12 @@ const fileInputStyle = {
   display: "block",
   width: "100%",
   fontSize: "14px",
+};
+
+const helperTextStyle = {
+  color: "#5c6b63",
+  fontSize: "13px",
+  marginTop: "10px",
 };
 
 const submitButtonStyle = {

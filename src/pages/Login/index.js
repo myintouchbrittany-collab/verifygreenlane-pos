@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth } from "../../firebase";
@@ -50,6 +51,11 @@ export default function Login() {
   return (
     <div style={pageStyle}>
       <div style={cardStyle}>
+        <div style={topLinkRowStyle}>
+          <Link to="/" style={backLinkStyle}>
+            Back to Home
+          </Link>
+        </div>
         <h1 style={headingStyle}>Staff Login</h1>
         <p style={subheadingStyle}>
           Sign in to access Greenlane Verified staff tools.
@@ -97,10 +103,21 @@ const pageStyle = {
 const cardStyle = {
   maxWidth: "500px",
   backgroundColor: "#ffffff",
-  borderRadius: "14px",
-  padding: "24px",
-  boxShadow: "0 4px 14px rgba(0, 0, 0, 0.08)",
+  borderRadius: "20px",
+  padding: "28px",
+  boxShadow: "0 12px 28px rgba(0, 0, 0, 0.08)",
   border: "1px solid #e6ece8",
+};
+
+const topLinkRowStyle = {
+  marginBottom: "8px",
+};
+
+const backLinkStyle = {
+  color: "#17633c",
+  textDecoration: "none",
+  fontWeight: "700",
+  fontSize: "14px",
 };
 
 const headingStyle = {

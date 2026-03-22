@@ -1,14 +1,51 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { formatCurrency, formatStatusLabel } from "../services/orderUtils";
 import {
   approvePreorder,
-  canEnterExpressPickup,
+  getNormalizedWorkflowState,
   getOrderWorkflowLabel,
   rejectPreorder,
   subscribeOrderDetail,
   updateOrderWorkflow,
 } from "../services/orderService";
+
+function buildOptimisticOrder(currentOrder, updates) {
+  if (!currentOrder) {
+    return currentOrder;
+  }
+
+  return {
+    ...currentOrder,
+    ...updates,
+    orderStatus: updates.orderStatus || currentOrder.orderStatus,
+    status: updates.orderStatus || updates.status || currentOrder.status,
+    verificationStatus:
+      updates.verificationStatus || currentOrder.verificationStatus,
+    idVerificationStatus:
+      updates.idVerificationStatus ||
+      updates.verificationStatus ||
+      currentOrder.idVerificationStatus,
+    checkedIn:
+      updates.checkedIn !== undefined ? Boolean(updates.checkedIn) : currentOrder.checkedIn,
+    checkInStatus:
+      updates.checkInStatus !== undefined
+        ? updates.checkInStatus
+        : currentOrder.checkInStatus,
+    expressEligible:
+      updates.expressEligible !== undefined
+        ? Boolean(updates.expressEligible)
+        : currentOrder.expressEligible,
+    pickupCode:
+      updates.pickupCode !== undefined ? updates.pickupCode : currentOrder.pickupCode,
+    arrivalTime:
+      updates.arrivalTime !== undefined ? updates.arrivalTime : currentOrder.arrivalTime,
+    checkoutTime:
+      updates.checkoutTime !== undefined
+        ? updates.checkoutTime
+        : currentOrder.checkoutTime,
+  };
+}
 
 export default function OrderDetail() {
   const { orderId } = useParams();
@@ -24,6 +61,63 @@ export default function OrderDetail() {
     });
   }, [orderId]);
 
+  const { orderStatus: normalizedOrderStatus, verificationStatus: normalizedVerificationStatus, checkInStatus } =
+    getNormalizedWorkflowState(order);
+  const canApprove =
+    Boolean(order) &&
+    workingAction === "" &&
+    normalizedOrderStatus !== "completed" &&
+    normalizedVerificationStatus !== "verified";
+  const canReject = Boolean(order) && workingAction === "" && normalizedOrderStatus !== "completed";
+  const canMarkReady =
+    Boolean(order) &&
+    workingAction === "" &&
+    (normalizedOrderStatus === "checked_in" ||
+      normalizedOrderStatus === "express_ready");
+  const canStartPrep =
+    Boolean(order) && workingAction === "" && normalizedOrderStatus === "checked_in";
+  const canCheckIn =
+    Boolean(order) &&
+    workingAction === "" &&
+    normalizedOrderStatus === "approved" &&
+    checkInStatus !== "checked_in";
+  const canComplete =
+    Boolean(order) &&
+    workingAction === "" &&
+    normalizedOrderStatus === "ready_for_pickup";
+
+  const detailRows = useMemo(
+    () => [
+      { label: "Customer", value: order?.customerName || order?.name },
+      { label: "Order Number", value: order?.orderNumber || order?.order },
+      { label: "Pickup Window", value: order?.pickupWindow || "Not set" },
+      { label: "Order Notes", value: order?.notes || "None" },
+      {
+        label: "ID Upload Status",
+        value: order?.idUploadComplete ? "Uploaded" : "Missing",
+      },
+      {
+        label: "Verification Status",
+        value: formatStatusLabel(
+          order?.verificationStatus || order?.idVerificationStatus
+        ),
+      },
+      {
+        label: "Express Eligibility",
+        value: order?.expressEligible ? "Eligible" : "Not Eligible",
+      },
+      {
+        label: "Order Status",
+        value: formatStatusLabel(order?.orderStatus || order?.status),
+      },
+      {
+        label: "Check-In Status",
+        value: formatStatusLabel(order?.checkInStatus || "not_arrived"),
+      },
+    ],
+    [order]
+  );
+
   const runAction = async (action, handler) => {
     if (!order) {
       return;
@@ -31,7 +125,10 @@ export default function OrderDetail() {
 
     try {
       setWorkingAction(action);
-      await handler();
+      const updates = await handler();
+      if (updates) {
+        setOrder((currentOrder) => buildOptimisticOrder(currentOrder, updates));
+      }
     } catch (error) {
       console.error(`Order action failed: ${action}`, error);
       alert("There was a problem updating this order.");
@@ -75,28 +172,9 @@ export default function OrderDetail() {
         <section style={cardStyle}>
           <h2 style={sectionTitleStyle}>Order Details</h2>
           <div style={detailsGridStyle}>
-            <Detail label="Customer" value={order.customerName || order.name} />
-            <Detail label="Order Number" value={order.orderNumber || order.order} />
-            <Detail label="Pickup Window" value={order.pickupWindow || "Not set"} />
-            <Detail label="Order Notes" value={order.notes || "None"} />
-            <Detail
-              label="ID Upload Status"
-              value={order.idUploadComplete ? "Uploaded" : "Missing"}
-            />
-            <Detail
-              label="Verification Status"
-              value={formatStatusLabel(
-                order.verificationStatus || order.idVerificationStatus
-              )}
-            />
-            <Detail
-              label="Express Eligibility"
-              value={order.expressEligible ? "Eligible" : "Not Eligible"}
-            />
-            <Detail
-              label="Order Status"
-              value={formatStatusLabel(order.orderStatus || order.status)}
-            />
+            {detailRows.map((detail) => (
+              <Detail key={detail.label} label={detail.label} value={detail.value} />
+            ))}
           </div>
 
           <div style={itemsPanelStyle}>
@@ -129,9 +207,7 @@ export default function OrderDetail() {
             <button
               type="button"
               style={approveButtonStyle}
-              disabled={
-                workingAction !== "" || (order.orderStatus || order.status) !== "pending_review"
-              }
+              disabled={!canApprove}
               onClick={() => runAction("approve", () => approvePreorder(order))}
             >
               {workingAction === "approve" ? "Approving..." : "Approve"}
@@ -139,9 +215,7 @@ export default function OrderDetail() {
             <button
               type="button"
               style={rejectButtonStyle}
-              disabled={
-                workingAction !== "" || (order.orderStatus || order.status) === "completed"
-              }
+              disabled={!canReject}
               onClick={() => runAction("reject", () => rejectPreorder(order))}
             >
               {workingAction === "reject" ? "Rejecting..." : "Reject"}
@@ -149,14 +223,14 @@ export default function OrderDetail() {
             <button
               type="button"
               style={actionButtonStyle}
-              disabled={workingAction !== "" || !canEnterExpressPickup(order)}
+              disabled={!canCheckIn}
               onClick={() =>
                 runAction("checkin", () =>
                   updateOrderWorkflow(order.orderId || order.id, order.customerId, {
+                    orderStatus: "checked_in",
+                    checkInStatus: "checked_in",
                     checkedIn: true,
                     arrivalTime: new Date().toLocaleTimeString(),
-                    status: "checked_in",
-                    orderStatus: "checked_in",
                     pickupStatus: "Checked In",
                   })
                 )
@@ -167,14 +241,25 @@ export default function OrderDetail() {
             <button
               type="button"
               style={actionButtonStyle}
-              disabled={
-                workingAction !== "" ||
-                !["checked_in", "express_ready"].includes(order.orderStatus)
+              disabled={!canStartPrep}
+              onClick={() =>
+                runAction("prep", () =>
+                  updateOrderWorkflow(order.orderId || order.id, order.customerId, {
+                    orderStatus: "express_ready",
+                    pickupStatus: "Preparing",
+                  })
+                )
               }
+            >
+              {workingAction === "prep" ? "Starting Prep..." : "Start Prep"}
+            </button>
+            <button
+              type="button"
+              style={actionButtonStyle}
+              disabled={!canMarkReady}
               onClick={() =>
                 runAction("ready", () =>
                   updateOrderWorkflow(order.orderId || order.id, order.customerId, {
-                    status: "ready_for_pickup",
                     orderStatus: "ready_for_pickup",
                     pickupStatus: "Ready for Pickup",
                   })
@@ -186,14 +271,14 @@ export default function OrderDetail() {
             <button
               type="button"
               style={completeButtonStyle}
-              disabled={workingAction !== "" || order.orderStatus !== "ready_for_pickup"}
+              disabled={!canComplete}
               onClick={() =>
                 runAction("complete", () =>
                   updateOrderWorkflow(order.orderId || order.id, order.customerId, {
-                    status: "completed",
                     orderStatus: "completed",
                     pickupStatus: "Completed",
                     checkoutTime: new Date().toLocaleTimeString(),
+                    completedAt: new Date().toISOString(),
                   })
                 )
               }

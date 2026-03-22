@@ -18,6 +18,8 @@ import {
   formatStatusLabel,
 } from "./orderUtils";
 import { DEFAULT_STORE_ID, matchesActiveStore } from "./storeConfig";
+import { prepareFirestorePayload } from "./firestoreUtils";
+import { buildActivityEntry } from "./orderActivity";
 
 function buildDisplayStatus(value) {
   return formatStatusLabel(value || "pending_review");
@@ -43,6 +45,10 @@ export function normalizeCustomerRecord(id, data) {
     pickupStatus: data.pickupStatus || "Pending Review",
     checkoutTime: data.checkoutTime || "",
     pickupWindow: data.pickupWindow || "",
+    pickupDate: data.pickupDate || "",
+    pickupTime: data.pickupTime || "",
+    pickupSlotKey: data.pickupSlotKey || "",
+    pickupSlotLabel: data.pickupSlotLabel || "",
     total: data.total || 0,
     orderItems: data.orderItems || [],
     idUploadComplete: Boolean(data.idUploadComplete),
@@ -65,7 +71,7 @@ export function subscribeCustomers(callback, storeId = DEFAULT_STORE_ID) {
 
 export async function updatePickupState(customerId, updates) {
   const customerRef = doc(db, "customers", customerId);
-  await updateDoc(customerRef, updates);
+  await updateDoc(customerRef, prepareFirestorePayload(updates));
 
   const customerSnapshot = await getDoc(customerRef);
   if (!customerSnapshot.exists()) {
@@ -76,10 +82,13 @@ export async function updatePickupState(customerId, updates) {
   const linkedOrderId = customerData.orderId;
 
   if (linkedOrderId) {
-    await updateDoc(doc(db, "orders", linkedOrderId), {
-      ...updates,
-      updatedAt: serverTimestamp(),
-    });
+    await updateDoc(
+      doc(db, "orders", linkedOrderId),
+      prepareFirestorePayload({
+        ...updates,
+        updatedAt: serverTimestamp(),
+      })
+    );
   }
 }
 
@@ -170,6 +179,10 @@ export async function createCustomerAndOrder({
     pickupStatus: orderFields.pickupStatus || "Pending Review",
     checkoutTime: "",
     pickupWindow: orderFields.pickupWindow || "",
+    pickupDate: orderFields.pickupDate || "",
+    pickupTime: orderFields.pickupTime || "",
+    pickupSlotKey: orderFields.pickupSlotKey || "",
+    pickupSlotLabel: orderFields.pickupSlotLabel || "",
     orderStatus:
       orderFields.orderStatus || preorderStatus,
     idVerificationStatus:
@@ -203,15 +216,34 @@ export async function createCustomerAndOrder({
     arrivalTime: "",
     checkoutTime: "",
     pickupCode,
+    pickupDate: orderFields.pickupDate || "",
+    pickupTime: orderFields.pickupTime || "",
+    pickupSlotKey: orderFields.pickupSlotKey || "",
+    pickupSlotLabel: orderFields.pickupSlotLabel || "",
     source: orderFields.source || "Customer Preorder",
+    activityLog: [
+      buildActivityEntry("created", new Date().toISOString(), "", "Order submitted"),
+    ],
     ...orderFields,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
 
   await Promise.all([
-    setDoc(customerRef, customerPayload, { merge: true }),
-    setDoc(orderRef, orderPayload, { merge: true }),
+    setDoc(
+      customerRef,
+      prepareFirestorePayload(customerPayload, {
+        defaultVerificationStatus: "pending",
+      }),
+      { merge: true }
+    ),
+    setDoc(
+      orderRef,
+      prepareFirestorePayload(orderPayload, {
+        defaultVerificationStatus: "pending",
+      }),
+      { merge: true }
+    ),
   ]);
 
   return {

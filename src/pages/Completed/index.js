@@ -1,22 +1,20 @@
 import React, { useMemo } from "react";
 import { useOrders } from "../../context/OrdersContext";
-import {
-  getOrderWorkflowLabel,
-} from "../../services/orderService";
+import { isCompletedOrder } from "../../services/orderService";
 import { formatStatusLabel } from "../../services/orderUtils";
 
 export default function Completed() {
   const { orders } = useOrders();
 
   const completedOrders = useMemo(() => {
-    return orders.filter((order) => order.orderStatus === "completed");
+    return orders.filter((order) => isCompletedOrder(order));
   }, [orders]);
 
   return (
     <div style={pageStyle}>
       <h1 style={headingStyle}>Completed Orders</h1>
       <p style={subheadingStyle}>
-        History of approved preorders that have been picked up.
+        Orders that have been fully completed and handed off.
       </p>
 
       {completedOrders.length === 0 ? (
@@ -28,27 +26,27 @@ export default function Completed() {
           <table style={tableStyle}>
             <thead>
               <tr>
-                <th style={thStyle}>Customer</th>
-                <th style={thStyle}>Order</th>
+                <th style={thStyle}>Order ID</th>
+                <th style={thStyle}>Order Number</th>
+                <th style={thStyle}>Pickup Code</th>
                 <th style={thStyle}>Verification</th>
-                <th style={thStyle}>Final Status</th>
-                <th style={thStyle}>Arrival Time</th>
-                <th style={thStyle}>Checkout Time</th>
+                <th style={thStyle}>Completed At</th>
               </tr>
             </thead>
             <tbody>
               {completedOrders.map((order) => (
                 <tr key={order.orderId || order.id}>
-                  <td style={tdStyle}>{order.customerName || order.name}</td>
+                  <td style={tdStyle}>{order.orderId || order.id}</td>
                   <td style={tdStyle}>{order.orderNumber || order.order}</td>
+                  <td style={tdStyle}>{order.pickupCode || "-"}</td>
                   <td style={tdStyle}>
-                    {formatStatusLabel(
-                      order.idVerificationStatus || "pending_verification"
-                    )}
+                    {formatStatusLabel(order.verificationStatus || "pending")}
                   </td>
-                  <td style={tdStyle}>{getOrderWorkflowLabel(order)}</td>
-                  <td style={tdStyle}>{order.arrivalTime || "-"}</td>
-                  <td style={tdStyle}>{order.checkoutTime || "-"}</td>
+                  <td style={tdStyle}>
+                    {order.completedAt
+                      ? new Date(order.completedAt).toLocaleString()
+                      : "-"}
+                  </td>
                 </tr>
               ))}
             </tbody>

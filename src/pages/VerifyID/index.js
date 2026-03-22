@@ -1,7 +1,10 @@
 import React, { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useOrders } from "../../context/OrdersContext";
 import {
   approvePreorder,
+  getNormalizedWorkflowState,
+  isReviewQueueOrder,
   rejectPreorder,
 } from "../../services/orderService";
 import { formatCurrency, formatStatusLabel } from "../../services/orderUtils";
@@ -11,10 +14,7 @@ export default function VerifyID() {
   const [workingOrderId, setWorkingOrderId] = useState("");
 
   const pendingOrders = useMemo(() => {
-    return orders.filter((order) => {
-      const status = order.orderStatus || order.status;
-      return status === "pending_review";
-    });
+    return orders.filter((order) => isReviewQueueOrder(order));
   }, [orders]);
 
   const handleApprove = async (order) => {
@@ -47,94 +47,61 @@ export default function VerifyID() {
         <div>
           <h1 style={headingStyle}>Preorder Verification Queue</h1>
           <p style={subheadingStyle}>
-            Review pending preorders, approve eligible customers, or reject
-            invalid submissions.
+            Review orders waiting for ID verification and move them into the
+            pickup workflow.
           </p>
         </div>
-        <div style={queueCountStyle}>
-          {pendingOrders.length} pending review
-        </div>
+        <div style={queueCountStyle}>{pendingOrders.length} pending review</div>
       </div>
 
       {pendingOrders.length === 0 ? (
-        <div style={emptyCardStyle}>
-          No preorders are waiting for verification.
-        </div>
+        <div style={emptyCardStyle}>No preorders are waiting for verification.</div>
       ) : (
         <div style={cardGridStyle}>
           {pendingOrders.map((order) => {
             const orderId = order.orderId || order.id;
             const isWorking = workingOrderId === orderId;
-            const idUploads = order.idUploads || {};
+            const { verificationStatus, orderStatus } =
+              getNormalizedWorkflowState(order);
 
             return (
               <article key={orderId} style={queueCardStyle}>
                 <div style={cardTopStyle}>
                   <div>
                     <h2 style={cardTitleStyle}>
-                      {order.customerName || order.name}
+                      <Link to={`/orders/${orderId}`} style={linkStyle}>
+                        {order.customerName || order.name}
+                      </Link>
                     </h2>
                     <div style={cardMetaStyle}>
-                      {order.orderNumber || order.order}
+                      <Link to={`/orders/${orderId}`} style={linkStyle}>
+                        {order.orderNumber || order.order}
+                      </Link>
                     </div>
                   </div>
                   <span style={badgeStyle("#fff4d6", "#8a6500")}>
-                    {formatStatusLabel(order.idVerificationStatus)}
+                    {formatStatusLabel(verificationStatus)}
                   </span>
                 </div>
 
                 <div style={detailsGridStyle}>
                   <div style={detailCardStyle}>
-                    <div style={detailLabelStyle}>Pickup Window</div>
-                    <div style={detailValueStyle}>
-                      {order.pickupWindow || "Not set"}
-                    </div>
+                    <div style={detailLabelStyle}>Pickup Code</div>
+                    <div style={detailValueStyle}>{order.pickupCode || "Pending"}</div>
+                  </div>
+                  <div style={detailCardStyle}>
+                    <div style={detailLabelStyle}>Order Status</div>
+                    <div style={detailValueStyle}>{formatStatusLabel(orderStatus)}</div>
                   </div>
                   <div style={detailCardStyle}>
                     <div style={detailLabelStyle}>Items</div>
                     <div style={detailValueStyle}>{order.itemCount || 0}</div>
                   </div>
                   <div style={detailCardStyle}>
-                    <div style={detailLabelStyle}>Subtotal</div>
+                    <div style={detailLabelStyle}>Total</div>
                     <div style={detailValueStyle}>
-                      {formatCurrency(order.subtotal || 0)}
+                      {formatCurrency(order.total || 0)}
                     </div>
-                  </div>
-                  <div style={detailCardStyle}>
-                    <div style={detailLabelStyle}>ID Uploaded</div>
-                    <div style={detailValueStyle}>
-                      {order.idUploadComplete ? "Yes" : "No"}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={uploadsPanelStyle}>
-                  <div style={panelHeadingStyle}>Uploaded ID</div>
-                  <div style={uploadLinksStyle}>
-                    {idUploads.frontDownloadUrl ? (
-                      <a
-                        href={idUploads.frontDownloadUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={linkStyle}
-                      >
-                        Front of ID
-                      </a>
-                    ) : (
-                      <span style={missingTextStyle}>Front missing</span>
-                    )}
-                    {idUploads.backDownloadUrl ? (
-                      <a
-                        href={idUploads.backDownloadUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={linkStyle}
-                      >
-                        Back of ID
-                      </a>
-                    ) : (
-                      <span style={missingTextStyle}>Back missing</span>
-                    )}
                   </div>
                 </div>
 
@@ -161,9 +128,9 @@ export default function VerifyID() {
                     type="button"
                     style={approveButtonStyle}
                     onClick={() => handleApprove(order)}
-                    disabled={isWorking || !order.idUploadComplete}
+                    disabled={isWorking}
                   >
-                    {isWorking ? "Updating..." : "Approve Preorder"}
+                    {isWorking ? "Updating..." : "Approve"}
                   </button>
                   <button
                     type="button"
@@ -299,14 +266,6 @@ const detailValueStyle = {
   fontWeight: "700",
 };
 
-const uploadsPanelStyle = {
-  marginTop: "16px",
-  borderRadius: "14px",
-  backgroundColor: "#fbfcfb",
-  border: "1px solid #e6ece8",
-  padding: "14px",
-};
-
 const itemsPanelStyle = {
   marginTop: "16px",
   borderRadius: "14px",
@@ -319,23 +278,6 @@ const panelHeadingStyle = {
   color: "#163126",
   fontWeight: "700",
   marginBottom: "10px",
-};
-
-const uploadLinksStyle = {
-  display: "flex",
-  gap: "12px",
-  flexWrap: "wrap",
-};
-
-const linkStyle = {
-  color: "#17633c",
-  fontWeight: "700",
-  textDecoration: "none",
-};
-
-const missingTextStyle = {
-  color: "#8a6500",
-  fontWeight: "700",
 };
 
 const itemRowStyle = {
@@ -370,5 +312,11 @@ const rejectButtonStyle = {
   borderRadius: "10px",
   padding: "12px 16px",
   cursor: "pointer",
+  fontWeight: "700",
+};
+
+const linkStyle = {
+  color: "#17633c",
+  textDecoration: "none",
   fontWeight: "700",
 };

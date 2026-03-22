@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { useOrders } from "../../context/OrdersContext";
 import {
-  canEnterExpressPickup,
+  getNormalizedWorkflowState,
   getOrderWorkflowLabel,
+  isCheckInQueueOrder,
   updateOrderWorkflow,
 } from "../../services/orderService";
 import { formatCurrency, formatStatusLabel } from "../../services/orderUtils";
@@ -13,7 +14,7 @@ export default function CheckIn() {
 
   const activeOrders = useMemo(() => {
     return orders
-      .filter((order) => canEnterExpressPickup(order))
+      .filter((order) => isCheckInQueueOrder(order))
       .filter((order) => {
         const name = (order.customerName || order.name || "").toLowerCase();
         const orderNumber = (order.orderNumber || order.order || "").toLowerCase();
@@ -26,10 +27,8 @@ export default function CheckIn() {
   const checkInCustomer = async (order) => {
     try {
       await updateOrderWorkflow(order.orderId || order.id, order.customerId, {
-        checkedIn: true,
+        checkInStatus: "checked_in",
         arrivalTime: new Date().toLocaleTimeString(),
-        status: "checked_in",
-        orderStatus: "checked_in",
         pickupStatus: "Checked In",
       });
     } catch (error) {
@@ -43,7 +42,7 @@ export default function CheckIn() {
         <div>
           <h1 style={headingStyle}>Customer Check-In</h1>
           <p style={subheadingStyle}>
-            Check in verified customers and review preorder summaries before prep.
+            Verified preorders waiting for customer arrival.
           </p>
         </div>
 
@@ -60,60 +59,57 @@ export default function CheckIn() {
         <div style={emptyCardStyle}>No customers waiting for check-in.</div>
       ) : (
         <div style={cardGridStyle}>
-          {activeOrders.map((order) => (
-            <div key={order.orderId || order.id} style={queueCardStyle}>
-              <div style={cardTopStyle}>
-                <h3 style={cardTitleStyle}>{order.customerName || order.name}</h3>
-                <span
-                  style={badgeStyle(
-                    order.orderStatus === "ready_for_pickup"
-                      ? "#dff3e8"
-                      : "#fff4d6",
-                    order.orderStatus === "ready_for_pickup"
-                      ? "#17633c"
-                      : "#8a6500"
-                  )}
-                >
-                  {getOrderWorkflowLabel(order)}
-                </span>
-              </div>
+          {activeOrders.map((order) => {
+            const { checkInStatus } = getNormalizedWorkflowState(order);
 
-              <p><strong>Order:</strong> {order.orderNumber || order.order}</p>
-              <p><strong>Pickup Window:</strong> {order.pickupWindow || "Not set"}</p>
-              <p>
-                <strong>ID Status:</strong>{" "}
-                {formatStatusLabel(order.idVerificationStatus || "pending_verification")}
-              </p>
-              <p><strong>Express Lane:</strong> Eligible</p>
-              <p><strong>Item Count:</strong> {order.itemCount || 0}</p>
-
-              {(order.orderItems || []).length > 0 ? (
-                <div style={summaryCardStyle}>
-                  <div style={summaryHeadingStyle}>Preorder Summary</div>
-                  {(order.orderItems || []).map((item) => (
-                    <div key={item.id} style={summaryRowStyle}>
-                      <span>
-                        {item.quantity} x {item.name}
-                      </span>
-                      <strong>
-                        {formatCurrency(
-                          (item.specialPrice || item.price) * item.quantity
-                        )}
-                      </strong>
-                    </div>
-                  ))}
+            return (
+              <div key={order.orderId || order.id} style={queueCardStyle}>
+                <div style={cardTopStyle}>
+                  <h3 style={cardTitleStyle}>{order.customerName || order.name}</h3>
+                  <span style={badgeStyle("#fff4d6", "#8a6500")}>
+                    {getOrderWorkflowLabel(order)}
+                  </span>
                 </div>
-              ) : null}
 
-              <button
-                onClick={() => checkInCustomer(order)}
-                style={primaryButtonStyle}
-                disabled={order.checkedIn || !canEnterExpressPickup(order)}
-              >
-                {order.checkedIn ? "Customer Checked In" : "Check In Customer"}
-              </button>
-            </div>
-          ))}
+                <p><strong>Order:</strong> {order.orderNumber || order.order}</p>
+                <p><strong>Pickup Code:</strong> {order.pickupCode || "Pending"}</p>
+                <p><strong>Pickup Window:</strong> {order.pickupWindow || "Not set"}</p>
+                <p>
+                  <strong>ID Status:</strong>{" "}
+                  {formatStatusLabel(order.verificationStatus || "pending_verification")}
+                </p>
+                <p><strong>Item Count:</strong> {order.itemCount || 0}</p>
+
+                {(order.orderItems || []).length > 0 ? (
+                  <div style={summaryCardStyle}>
+                    <div style={summaryHeadingStyle}>Preorder Summary</div>
+                    {(order.orderItems || []).map((item) => (
+                      <div key={item.id} style={summaryRowStyle}>
+                        <span>
+                          {item.quantity} x {item.name}
+                        </span>
+                        <strong>
+                          {formatCurrency(
+                            (item.specialPrice || item.price) * item.quantity
+                          )}
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <button
+                  onClick={() => checkInCustomer(order)}
+                  style={primaryButtonStyle}
+                  disabled={checkInStatus === "checked_in"}
+                >
+                  {checkInStatus === "checked_in"
+                    ? "Customer Checked In"
+                    : "Check In Customer"}
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
