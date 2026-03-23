@@ -1,4 +1,4 @@
-import { buildPickupCode, formatStatusLabel } from "./orderUtils";
+import { buildPickupCode, formatStatusLabel, parsePickupCode } from "./orderUtils";
 import { getNormalizedWorkflowState } from "./orderService";
 
 export const WARNING_WAIT_MINUTES = 5;
@@ -317,4 +317,62 @@ export function sortQueueOrders(orders, now = new Date()) {
 
     return getWaitTimeMinutes(right, now) - getWaitTimeMinutes(left, now);
   });
+}
+
+export function getPublicQueueOrders(orders, now = new Date()) {
+  return sortQueueOrders(
+    orders.filter((order) => {
+      const queueStatus = getQueueStatus(order);
+      return queueStatus === "arrived" || queueStatus === "preparing" || queueStatus === "ready";
+    }),
+    now
+  );
+}
+
+export function getPublicQueueIdentifier(order) {
+  const parsedPickupCode = parsePickupCode(order?.pickupCode || "");
+  const rawIdentifier =
+    parsedPickupCode?.orderNumber ||
+    order?.orderNumber ||
+    order?.order ||
+    order?.orderId ||
+    order?.id ||
+    order?.customerId ||
+    "";
+  const compactIdentifier = `${rawIdentifier}`.replace(/[^a-z0-9]/gi, "").toUpperCase();
+
+  if (!compactIdentifier) {
+    return "GL-QUEUE";
+  }
+
+  return `GL-${compactIdentifier.slice(-4).padStart(4, "0")}`;
+}
+
+export function buildPublicQueueView(orders, now = new Date()) {
+  const queueOrders = getPublicQueueOrders(orders, now);
+  const nowServing =
+    queueOrders.find((order) => getQueueStatus(order) === "ready") || queueOrders[0] || null;
+  const remainingOrders = nowServing
+    ? queueOrders.filter(
+        (order) => (order?.orderId || order?.id) !== (nowServing.orderId || nowServing.id)
+      )
+    : queueOrders;
+
+  return [
+    {
+      id: "now-serving",
+      title: "Now Serving",
+      order: nowServing,
+    },
+    {
+      id: "next-in-line",
+      title: "Next in Line",
+      order: remainingOrders[0] || null,
+    },
+    {
+      id: "on-deck",
+      title: "On Deck",
+      order: remainingOrders[1] || null,
+    },
+  ];
 }

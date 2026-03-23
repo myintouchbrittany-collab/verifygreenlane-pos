@@ -235,7 +235,7 @@ export default function CustomerOrder() {
           <div style={eyebrowStyle}>Customer Express Pickup</div>
           <h1 style={headingStyle}>Order ahead, upload ID, skip the lobby wait.</h1>
           <p style={heroCopyStyle}>
-            Build a preorder, attach your ID, and receive your pickup QR code
+            Build a preorder, attach your ID, and receive your pickup barcode
             as soon as staff approves the order.
           </p>
         </div>

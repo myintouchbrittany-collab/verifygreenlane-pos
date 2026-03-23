@@ -20,12 +20,15 @@ import {
 import { DEFAULT_STORE_ID, matchesActiveStore } from "./storeConfig";
 import { prepareFirestorePayload } from "./firestoreUtils";
 import { buildActivityEntry } from "./orderActivity";
+import { buildDefaultLoyaltyProfile } from "./loyalty";
 
 function buildDisplayStatus(value) {
   return formatStatusLabel(value || "pending_review");
 }
 
 export function normalizeCustomerRecord(id, data) {
+  const defaultLoyaltyProfile = buildDefaultLoyaltyProfile();
+
   return {
     id,
     orderId: data.orderId || id,
@@ -55,6 +58,23 @@ export function normalizeCustomerRecord(id, data) {
     expressEligible: Boolean(data.expressEligible),
     source: data.source || "Legacy Customer Flow",
     phoneNumber: data.phoneNumber || "",
+    totalSpend:
+      typeof data.totalSpend === "number"
+        ? data.totalSpend
+        : defaultLoyaltyProfile.totalSpend,
+    loyaltyPoints:
+      typeof data.loyaltyPoints === "number"
+        ? data.loyaltyPoints
+        : defaultLoyaltyProfile.loyaltyPoints,
+    availableRewards: Array.isArray(data.availableRewards)
+      ? data.availableRewards
+      : defaultLoyaltyProfile.availableRewards,
+    tier: data.tier || defaultLoyaltyProfile.tier,
+    visitCount:
+      typeof data.visitCount === "number"
+        ? data.visitCount
+        : defaultLoyaltyProfile.visitCount,
+    lastPurchaseAt: data.lastPurchaseAt || defaultLoyaltyProfile.lastPurchaseAt,
     ...data,
   };
 }
@@ -161,6 +181,7 @@ export async function createCustomerAndOrder({
           orderNumber,
         })
       : "");
+  const defaultLoyaltyProfile = buildDefaultLoyaltyProfile();
 
   const customerPayload = {
     storeId,
@@ -191,6 +212,7 @@ export async function createCustomerAndOrder({
     orderNumber,
     pickupCode,
     expressEligible: Boolean(customerFields.expressEligible),
+    ...defaultLoyaltyProfile,
     ...customerFields,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

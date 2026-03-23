@@ -15,6 +15,56 @@ export const STORE_PICKUP_CONFIG = {
   },
 };
 
+export const STORE_LOYALTY_CONFIG = {
+  pointsPerDollar: 1,
+  rewardThresholds: [
+    {
+      id: "five-off",
+      title: "$5 Off",
+      pointsCost: 100,
+      description: "Use on a future preorder or pickup.",
+    },
+    {
+      id: "ten-off",
+      title: "$10 Off",
+      pointsCost: 250,
+      description: "Best for larger express pickups.",
+    },
+    {
+      id: "vip-pre-roll",
+      title: "Free Pre-Roll",
+      pointsCost: 400,
+      description: "Ask staff about this member-only reward.",
+    },
+  ],
+  tiers: [
+    {
+      id: "seed",
+      name: "Seed",
+      minTotalSpend: 0,
+    },
+    {
+      id: "bloom",
+      name: "Bloom",
+      minTotalSpend: 250,
+    },
+    {
+      id: "evergreen",
+      name: "Evergreen",
+      minTotalSpend: 600,
+    },
+    {
+      id: "canopy",
+      name: "Canopy",
+      minTotalSpend: 1200,
+    },
+  ],
+};
+
+export function getStoreLoyaltyConfig() {
+  return STORE_LOYALTY_CONFIG;
+}
+
 export function matchesActiveStore(record, storeId = DEFAULT_STORE_ID) {
   if (!record) {
     return false;

@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from "react";
 import { useOrders } from "../../context/OrdersContext";
 import {
+  completeOrderWithLoyalty,
   getOrderWorkflowLabel,
   isCheckoutQueueOrder,
-  updateOrderWorkflow,
 } from "../../services/orderService";
+import { getPointsForSpend } from "../../services/loyalty";
 import { formatCurrency, formatStatusLabel } from "../../services/orderUtils";
 
 export default function Checkout() {
@@ -25,12 +26,7 @@ export default function Checkout() {
 
   const completePickup = async (order) => {
     try {
-      await updateOrderWorkflow(order.orderId || order.id, order.customerId, {
-        orderStatus: "completed",
-        pickupStatus: "Completed",
-        checkoutTime: new Date().toLocaleTimeString(),
-        completedAt: new Date().toISOString(),
-      });
+      await completeOrderWithLoyalty(order);
     } catch (error) {
       console.error("Checkout error:", error);
     }
@@ -107,6 +103,9 @@ export default function Checkout() {
               <div style={totalsRowStyle}>
                 <span>Total</span>
                 <strong>{formatCurrency(order.total || 0)}</strong>
+              </div>
+              <div style={loyaltyPreviewStyle}>
+                This pickup will add {getPointsForSpend(order.total || 0)} loyalty points.
               </div>
 
               <button
@@ -252,6 +251,16 @@ const completeButtonStyle = {
   fontWeight: "bold",
   marginTop: "16px",
   width: "100%",
+};
+
+const loyaltyPreviewStyle = {
+  marginTop: "12px",
+  padding: "12px 14px",
+  borderRadius: "12px",
+  backgroundColor: "#eef5f1",
+  color: "#17633c",
+  fontWeight: "700",
+  fontSize: "14px",
 };
 
 const emptyCardStyle = {

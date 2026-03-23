@@ -1,6 +1,8 @@
 import {
+  buildPublicQueueView,
   buildQueueSummary,
   formatWaitTime,
+  getPublicQueueIdentifier,
   getNextBestActionLabel,
   getNextQueueAction,
   getQueueStatus,
@@ -161,4 +163,42 @@ test("maps queue states to next best action labels", () => {
       arrivedAt: "2026-03-18T11:55:00.000Z",
     }, new Date("2026-03-18T12:10:00.000Z"))
   ).toBe("Priority");
+});
+
+test("builds masked public queue identifiers from pickup payloads", () => {
+  expect(
+    getPublicQueueIdentifier({
+      pickupCode: JSON.stringify({
+        customerId: "cust-998",
+        orderNumber: "GL-456789",
+      }),
+    })
+  ).toBe("GL-6789");
+});
+
+test("prioritizes ready pickups for now serving on the public display", () => {
+  const slots = buildPublicQueueView(
+    [
+      {
+        orderId: "arrived-order",
+        orderStatus: "checked_in",
+        arrivedAt: "2026-03-18T12:05:00.000Z",
+      },
+      {
+        orderId: "ready-order",
+        orderStatus: "ready_for_pickup",
+        arrivedAt: "2026-03-18T12:00:00.000Z",
+      },
+      {
+        orderId: "prep-order",
+        orderStatus: "express_ready",
+        arrivedAt: "2026-03-18T12:01:00.000Z",
+      },
+    ],
+    new Date("2026-03-18T12:10:00.000Z")
+  );
+
+  expect(slots[0].order.orderId).toBe("ready-order");
+  expect(slots[1].order.orderId).toBe("arrived-order");
+  expect(slots[2].order.orderId).toBe("prep-order");
 });

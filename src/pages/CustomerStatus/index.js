@@ -8,11 +8,16 @@ import {
   getCustomerStatusPresentation,
 } from "../../services/orderService";
 import {
+  getNextReward,
+  getPointsForSpend,
+} from "../../services/loyalty";
+import {
   getCustomerOrderSnapshot,
   getLatestCustomerOrderId,
   saveCustomerOrderSnapshot,
 } from "../../services/customerOrderSession";
 import { useOrderRecord } from "../../hooks/useOrderRecord";
+import PickupBarcode from "../../components/PickupBarcode";
 import { formatCurrency } from "../../services/orderUtils";
 
 function formatSubmittedAt(value) {
@@ -140,6 +145,9 @@ export default function CustomerStatus() {
   const pickupCodeReady = canGeneratePickupCode(order);
   const statusPresentation = getCustomerStatusPresentation(order);
   const progressSteps = getCustomerProgressSteps(order);
+  const projectedPoints = getPointsForSpend(order.total || 0);
+  const nextReward = getNextReward(order.loyaltyPoints || 0);
+  const rewardList = Array.isArray(order.availableRewards) ? order.availableRewards : [];
 
   return (
     <div style={pageStyle}>
@@ -209,6 +217,13 @@ export default function CustomerStatus() {
                 <div style={detailValueStyle}>{formatCurrency(order.total || 0)}</div>
               </div>
             </div>
+
+            {pickupCodeReady ? (
+              <PickupBarcode
+                value={order.pickupCode}
+                containerStyle={pickupBarcodeCardStyle}
+              />
+            ) : null}
           </div>
 
           <div style={summaryCardStyle}>
@@ -225,6 +240,63 @@ export default function CustomerStatus() {
               <Link to="/order" style={secondaryButtonStyle}>
                 Start Another Order
               </Link>
+            </div>
+          </div>
+        </section>
+
+        <section style={detailsCardStyle}>
+          <div style={sectionTitleStyle}>Loyalty & Rewards</div>
+          <div style={detailsGridStyle}>
+            <div style={detailTileStyle}>
+              <div style={detailLabelStyle}>Tier</div>
+              <div style={detailValueStyle}>{order.tier || "Seed"}</div>
+            </div>
+            <div style={detailTileStyle}>
+              <div style={detailLabelStyle}>Points</div>
+              <div style={detailValueStyle}>{order.loyaltyPoints || 0}</div>
+            </div>
+            <div style={detailTileStyle}>
+              <div style={detailLabelStyle}>Total Spend</div>
+              <div style={detailValueStyle}>{formatCurrency(order.totalSpend || 0)}</div>
+            </div>
+            <div style={detailTileStyle}>
+              <div style={detailLabelStyle}>Visits</div>
+              <div style={detailValueStyle}>{order.visitCount || 0}</div>
+            </div>
+          </div>
+
+          <div style={loyaltyBodyStyle}>
+            <div style={loyaltySummaryStyle}>
+              {statusPresentation.state === "completed"
+                ? `This pickup added ${projectedPoints} point${projectedPoints === 1 ? "" : "s"} to your account.`
+                : `Complete this pickup to earn ${projectedPoints} point${projectedPoints === 1 ? "" : "s"}.`}
+            </div>
+
+            {nextReward ? (
+              <div style={loyaltyHintStyle}>
+                Next reward: {nextReward.title} in {nextReward.pointsRemaining} more points.
+              </div>
+            ) : (
+              <div style={loyaltyHintStyle}>
+                You have unlocked every configured reward tier right now.
+              </div>
+            )}
+
+            <div style={rewardListStyle}>
+              {rewardList.length === 0 ? (
+                <div style={rewardEmptyStyle}>
+                  No rewards unlocked yet. Keep ordering to earn more points.
+                </div>
+              ) : (
+                rewardList.map((reward) => (
+                  <div key={reward.id} style={rewardCardStyle}>
+                    <div style={rewardTitleStyle}>{reward.title}</div>
+                    <div style={rewardCopyStyle}>
+                      {reward.pointsCost} points{reward.description ? ` • ${reward.description}` : ""}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </section>
@@ -481,10 +553,64 @@ const detailValueStyle = {
   lineHeight: 1.45,
 };
 
+const pickupBarcodeCardStyle = {
+  marginTop: "18px",
+};
+
 const actionListStyle = {
   display: "grid",
   gap: "14px",
   marginTop: "18px",
+};
+
+const loyaltyBodyStyle = {
+  marginTop: "18px",
+};
+
+const loyaltySummaryStyle = {
+  color: "#163126",
+  fontWeight: "700",
+  fontSize: "16px",
+};
+
+const loyaltyHintStyle = {
+  marginTop: "8px",
+  color: "#5c6b63",
+  fontSize: "14px",
+  lineHeight: 1.5,
+};
+
+const rewardListStyle = {
+  display: "grid",
+  gap: "12px",
+  marginTop: "18px",
+};
+
+const rewardCardStyle = {
+  border: "1px solid #e6ece8",
+  borderRadius: "18px",
+  backgroundColor: "#f8faf8",
+  padding: "16px",
+};
+
+const rewardTitleStyle = {
+  color: "#163126",
+  fontWeight: "700",
+  fontSize: "15px",
+};
+
+const rewardCopyStyle = {
+  marginTop: "6px",
+  color: "#5c6b63",
+  fontSize: "14px",
+};
+
+const rewardEmptyStyle = {
+  border: "1px dashed #cdd8d1",
+  borderRadius: "18px",
+  padding: "18px",
+  color: "#5c6b63",
+  backgroundColor: "#fafcfb",
 };
 
 const itemListStyle = {

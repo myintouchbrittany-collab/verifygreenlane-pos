@@ -1,5 +1,6 @@
 import { createCustomerAndOrder, subscribeCustomers } from "./orderModel";
 import {
+  completeOrderWithLoyalty,
   mergeOrdersWithCustomers,
   subscribeOrders,
   updateOrderWorkflow,
@@ -84,12 +85,13 @@ export async function updateOrder(orderId, updates) {
 }
 
 export async function completeOrder(orderId) {
-  await updateOrder(orderId, {
-    status: "completed",
-    orderStatus: "completed",
-    pickupStatus: "Completed",
-    checkoutTime: new Date().toLocaleTimeString(),
-  });
+  const order = mergedOrders.find((entry) => (entry.orderId || entry.id) === orderId);
+
+  if (!order) {
+    throw new Error("Order not found.");
+  }
+
+  await completeOrderWithLoyalty(order);
 }
 
 export function findOrder(rawValue, storeId = DEFAULT_STORE_ID) {

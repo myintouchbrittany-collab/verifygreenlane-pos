@@ -56,7 +56,7 @@ export default function ScanPickup() {
         <div>
           <h1 style={headingStyle}>Scan Pickup</h1>
           <p style={subheadingStyle}>
-            Lookup preorders by pickup code, QR code, or order number using the
+            Lookup preorders by pickup code, barcode, or order number using the
             shared orders source.
           </p>
         </div>
@@ -95,7 +95,7 @@ export default function ScanPickup() {
             style={textAreaStyle}
             value={manualCode}
             onChange={(event) => setManualCode(event.target.value)}
-            placeholder="Paste QR payload, pickup code, or order number"
+            placeholder="Paste barcode value, pickup code, or order number"
           />
 
           <button
@@ -178,7 +178,7 @@ export default function ScanPickup() {
             </>
           ) : (
             <div style={emptyScannerStyle}>
-              Scan a customer QR code to load the preorder.
+              Scan a customer barcode to load the preorder.
             </div>
           )}
         </section>

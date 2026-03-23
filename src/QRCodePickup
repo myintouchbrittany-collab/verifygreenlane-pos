@@ -1,23 +1,19 @@
 import React from "react";
-import QRCode from "qrcode.react";
+import PickupBarcode from "./components/PickupBarcode";
 
 function QRCodePickup({ orders }) {
 
   if (!orders.length) {
-    return <p>No active orders to generate QR codes.</p>;
+    return <p>No active orders to generate pickup barcodes.</p>;
   }
 
   return (
     <div>
-      <h2>Customer Pickup QR Codes</h2>
-      <p>Customers can scan these at check-in.</p>
+      <h2>Customer Pickup Barcodes</h2>
+      <p>Customers can scan these at check-in or enter the pickup code manually.</p>
 
       {orders.map(order => {
-
-        const pickupCode = JSON.stringify({
-          orderId: order.id,
-          customer: order.customerId
-        });
+        const pickupCode = order.pickupCode || "";
 
         return (
           <div key={order.id} style={cardStyle}>
@@ -27,17 +23,10 @@ function QRCodePickup({ orders }) {
             <p>Order Item: {order.item}</p>
             <p>Quantity: {order.quantity}</p>
 
-            <QRCode
+            <PickupBarcode
               value={pickupCode}
-              size={180}
-              bgColor="#ffffff"
-              fgColor="#000000"
-              level="H"
+              helperText="Scan this barcode at the dispensary check-in."
             />
-
-            <p style={{marginTop:"10px"}}>
-              Scan this QR at the dispensary check-in
-            </p>
 
           </div>
         );

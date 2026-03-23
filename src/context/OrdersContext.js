@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useMemo } from "react";
 import { useOrdersData } from "../hooks/useOrdersData";
 import {
+  completeOrderWithLoyalty,
   createPreorder,
   findOrderFromSharedSource,
   updateOrderWorkflow,
@@ -19,15 +20,8 @@ export function OrdersProvider({ children }) {
       updateOrder: async (orderId, updates, customerId) =>
         updateOrderWorkflow(orderId, customerId, updates),
       completeOrder: async (orderId) =>
-        updateOrderWorkflow(
-          orderId,
-          orders.find((order) => (order.orderId || order.id) === orderId)?.customerId,
-          {
-            orderStatus: "completed",
-            status: "completed",
-            checkoutTime: new Date().toLocaleTimeString(),
-            completedAt: new Date().toISOString(),
-          }
+        completeOrderWithLoyalty(
+          orders.find((order) => (order.orderId || order.id) === orderId) || null
         ),
       findOrderByPickupCode: (value) => findOrderFromSharedSource(value, orders),
     }),

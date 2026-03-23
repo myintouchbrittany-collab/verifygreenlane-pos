@@ -1,7 +1,8 @@
-import { doc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { DEFAULT_STORE_ID } from "./storeConfig";
 import { prepareFirestorePayload } from "./firestoreUtils";
+import { buildDefaultLoyaltyProfile } from "./loyalty";
 
 export async function createCustomerRecord({
   customerId,
@@ -23,6 +24,8 @@ export async function createCustomerRecord({
   orderStatus,
   source,
 }) {
+  const loyaltyProfile = buildDefaultLoyaltyProfile();
+
   await setDoc(
     doc(db, "customers", customerId),
     prepareFirestorePayload({
@@ -53,12 +56,30 @@ export async function createCustomerRecord({
         frontFileName: frontIdFileName || "",
         backFileName: backIdFileName || "",
       },
+      ...loyaltyProfile,
       source,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }, { defaultVerificationStatus: "pending" }),
     { merge: true }
   );
+}
+
+export async function getCustomerRecord(customerId) {
+  if (!customerId) {
+    return null;
+  }
+
+  const customerSnapshot = await getDoc(doc(db, "customers", customerId));
+
+  if (!customerSnapshot.exists()) {
+    return null;
+  }
+
+  return {
+    id: customerSnapshot.id,
+    ...customerSnapshot.data(),
+  };
 }
 
 export async function updateCustomerRecord(customerId, updates) {

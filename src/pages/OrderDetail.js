@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { formatCurrency, formatStatusLabel } from "../services/orderUtils";
 import {
   approvePreorder,
+  completeOrderWithLoyalty,
   getNormalizedWorkflowState,
   getOrderWorkflowLabel,
   rejectPreorder,
@@ -273,14 +274,7 @@ export default function OrderDetail() {
               style={completeButtonStyle}
               disabled={!canComplete}
               onClick={() =>
-                runAction("complete", () =>
-                  updateOrderWorkflow(order.orderId || order.id, order.customerId, {
-                    orderStatus: "completed",
-                    pickupStatus: "Completed",
-                    checkoutTime: new Date().toLocaleTimeString(),
-                    completedAt: new Date().toISOString(),
-                  })
-                )
+                runAction("complete", () => completeOrderWithLoyalty(order))
               }
             >
               {workingAction === "complete" ? "Completing..." : "Complete"}

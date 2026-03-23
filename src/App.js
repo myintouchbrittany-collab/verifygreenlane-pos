@@ -4,6 +4,7 @@ import {
   Routes,
   Route,
   Link,
+  useLocation,
   useNavigate,
 } from "react-router-dom";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -20,6 +21,7 @@ import OrderConfirmation from "./pages/OrderConfirmation";
 import ScanPickup from "./pages/ScanPickup";
 import OrderDetail from "./pages/OrderDetail";
 import ParkingCheckIn from "./pages/ParkingCheckIn";
+import PublicDisplay from "./pages/PublicDisplay";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { OrdersProvider } from "./context/OrdersContext";
 
@@ -64,6 +66,9 @@ function Navigation() {
         <Link style={publicLinkStyle} to="/check-in">
           Check In
         </Link>
+        <Link style={publicLinkStyle} to="/display">
+          Public Display
+        </Link>
         <Link style={publicLinkStyle} to="/staff-login">
           Staff Login
         </Link>
@@ -96,64 +101,74 @@ function Navigation() {
   );
 }
 
+function AppContent() {
+  const location = useLocation();
+  const isPublicDisplayRoute = location.pathname === "/display";
+
+  return (
+    <div style={isPublicDisplayRoute ? publicDisplayShellStyle : appShellStyle}>
+      {isPublicDisplayRoute ? null : <Navigation />}
+
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/staff-login" element={<Login />} />
+        <Route path="/order" element={<CustomerOrder />} />
+        <Route path="/customer-status" element={<CustomerStatus />} />
+        <Route path="/check-in" element={<ParkingCheckIn />} />
+        <Route path="/order-confirmation" element={<OrderConfirmation />} />
+        <Route path="/customer-upload" element={<CustomerUpload />} />
+        <Route path="/display" element={<PublicDisplay />} />
+
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/scan-pickup"
+          element={
+            <ProtectedRoute>
+              <ScanPickup />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/checkout"
+          element={
+            <ProtectedRoute>
+              <Checkout />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/completed"
+          element={
+            <ProtectedRoute>
+              <Completed />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/orders/:orderId"
+          element={
+            <ProtectedRoute>
+              <OrderDetail />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </div>
+  );
+}
+
 function App() {
   return (
     <Router>
       <OrdersProvider>
-        <div style={appShellStyle}>
-          <Navigation />
-
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/staff-login" element={<Login />} />
-            <Route path="/order" element={<CustomerOrder />} />
-            <Route path="/customer-status" element={<CustomerStatus />} />
-            <Route path="/check-in" element={<ParkingCheckIn />} />
-            <Route path="/order-confirmation" element={<OrderConfirmation />} />
-            <Route path="/customer-upload" element={<CustomerUpload />} />
-
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/scan-pickup"
-              element={
-                <ProtectedRoute>
-                  <ScanPickup />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/checkout"
-              element={
-                <ProtectedRoute>
-                  <Checkout />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/completed"
-              element={
-                <ProtectedRoute>
-                  <Completed />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/orders/:orderId"
-              element={
-                <ProtectedRoute>
-                  <OrderDetail />
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
-        </div>
+        <AppContent />
       </OrdersProvider>
     </Router>
   );
@@ -164,6 +179,11 @@ const appShellStyle = {
   minHeight: "100vh",
   background:
     "linear-gradient(180deg, #eff5ef 0%, #f9fbf8 28%, #f4f7f5 100%)",
+};
+
+const publicDisplayShellStyle = {
+  minHeight: "100vh",
+  backgroundColor: "#0d1f19",
 };
 
 const navStyle = {

@@ -18,9 +18,11 @@ import {
 } from "./orderActivity";
 import {
   createCustomerRecord,
+  getCustomerRecord,
   syncCustomerOrderSummary,
   updateCustomerRecord,
 } from "./customerService";
+import { buildCompletedOrderLoyaltyProfile } from "./loyalty";
 
 export const ACTIVE_ORDER_STATUSES = [
   "pending_review",
@@ -195,6 +197,12 @@ export function normalizeOrderRecord(id, data) {
     readyAt: toIsoString(data.readyAt),
     activityLog: Array.isArray(data.activityLog) ? data.activityLog : [],
     completedAt: toIsoString(data.completedAt),
+    totalSpend: typeof data.totalSpend === "number" ? data.totalSpend : 0,
+    loyaltyPoints: typeof data.loyaltyPoints === "number" ? data.loyaltyPoints : 0,
+    availableRewards: Array.isArray(data.availableRewards) ? data.availableRewards : [],
+    tier: data.tier || "Seed",
+    visitCount: typeof data.visitCount === "number" ? data.visitCount : 0,
+    lastPurchaseAt: toIsoString(data.lastPurchaseAt),
   };
 }
 
@@ -415,6 +423,28 @@ export async function updateOrderWorkflow(orderId, customerId, updates) {
   }
 
   return normalizedUpdates;
+}
+
+export async function completeOrderWithLoyalty(order) {
+  if (!order) {
+    throw new Error("Order is required to complete checkout.");
+  }
+
+  const customerId = order.customerId;
+  const purchaseDate = new Date().toISOString();
+  const customerRecord = customerId ? await getCustomerRecord(customerId) : null;
+  const loyaltyProfile = buildCompletedOrderLoyaltyProfile(customerRecord, order, {
+    purchaseDate,
+  });
+
+  return updateOrderWorkflow(order.orderId || order.id, customerId, {
+    orderStatus: "completed",
+    status: "completed",
+    pickupStatus: "Completed",
+    checkoutTime: new Date().toLocaleTimeString(),
+    completedAt: purchaseDate,
+    ...loyaltyProfile,
+  });
 }
 
 export function getOrderWorkflowLabel(order) {
